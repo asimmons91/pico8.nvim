@@ -747,9 +747,7 @@ end
 local function revalidate_managed()
   local pending = {}
   for bufnr in pairs(managed) do
-    local loaded = vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr)
-    local name = loaded and vim.api.nvim_buf_get_name(bufnr) or ""
-    if loaded and name ~= "" and name:sub(-4):lower() == ".lua" then
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
       pending[#pending + 1] = bufnr
     else
       managed[bufnr] = nil
@@ -880,7 +878,8 @@ local function rescan_cart(bufnr)
 end
 
 -- An unloaded or deleted cart buffer no longer supplies include data. Drop its
--- cache so the next lookup reads disk instead of a stale loaded-buffer entry.
+-- cache and revalidate after the unload settles so managed includes follow the
+-- disk contents instead of the stale loaded-buffer entry.
 local function forget_cart(bufnr)
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" then
@@ -889,6 +888,11 @@ local function forget_cart(bufnr)
   local cart = normalize(name)
   close_rescan_timer(cart)
   invalidate_cart(cart)
+  vim.schedule(function()
+    if not M.disabled then
+      rescan()
+    end
+  end)
 end
 
 function M.refresh()
@@ -975,9 +979,15 @@ function M.setup(opts)
   end
 
   if opts.lsp ~= false then
-    local ok, err = pcall(vim.lsp.enable, "pico_lsp")
-    if not ok then
-      notify("could not enable pico_lsp: " .. tostring(err), vim.log.levels.ERROR)
+    -- Re-enabling an already enabled config makes Neovim sweep every FileType
+    -- buffer, which detaches user-started pico_lsp clients from .lua buffers.
+    -- The config stays enabled; new buffers still use the current config.
+    local already_enabled = type(vim.lsp.is_enabled) == "function" and vim.lsp.is_enabled("pico_lsp")
+    if not already_enabled then
+      local ok, err = pcall(vim.lsp.enable, "pico_lsp")
+      if not ok then
+        notify("could not enable pico_lsp: " .. tostring(err), vim.log.levels.ERROR)
+      end
     end
   end
 

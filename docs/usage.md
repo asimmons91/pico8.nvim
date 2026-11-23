@@ -72,9 +72,8 @@ buffers:
 ```
 
 A loaded cart buffer is authoritative. After an external tool changes an open
-cart, reload it with `:edit!` (or unload it); the helper rescans on reload.
-`:Pico8Refresh` does not reload cart buffers, so use it for carts that are not
-loaded or after an external change that did not reload the buffer.
+cart, reload it with `:edit!`; the helper rescans on reload. `:Pico8Refresh`
+does not reload cart buffers, so use it for carts that are not loaded.
 
 The command is safe with no carts open and when the helper is disabled; in the
 disabled case it reports that state and does no scanning.
@@ -89,8 +88,10 @@ require("pico_lsp").setup({ disable = true })
 or `vim.g.pico_lsp_helper_disabled = 1`.
 
 Disabling detaches the cart-owned `.lua` attachments the helper created. A
-`pico_lsp` client you started yourself remains attached, and the other helper
-commands report that the helper is disabled instead of acting.
+`pico_lsp` client you started yourself remains attached. A fresh disabled setup
+registers only `:Pico8Refresh`, which reports the disabled state; commands
+already registered by an earlier enabled setup also report it. Re-running an
+enabled setup keeps existing helper-managed and user-started clients attached.
 
 The `.p8` ftplugin sets PICO-8 comment options for carts:
 

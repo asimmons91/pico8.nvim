@@ -164,6 +164,11 @@ fire_text_changed(cart_1_buf)
 if #clients(fresh_buf) == 0 then
   fail("an unsaved cart edit detached synchronously instead of debouncing")
 end
+if vim.wait(100, function()
+  return #clients(fresh_buf) == 0
+end, 25) then
+  fail("cart edits rescanned before the debounce elapsed")
+end
 wait_for(function()
   return #clients(fresh_buf) == 0
 end, "removing an unsaved include did not detach the managed client")
@@ -172,12 +177,15 @@ if #clients(cart_1_buf) == 0 then
   fail("removing an include stopped the cart's own client")
 end
 
--- Adding it back through TextChangedI reattaches after the debounce.
+-- Adding it back through TextChangedI is visible on the next BufEnter, without
+-- waiting for the debounce.
 set_cart_includes(cart_1_buf, { "fresh.lua", "keep.lua" })
 vim.api.nvim_exec_autocmds("TextChangedI", { buffer = cart_1_buf })
-wait_for(function()
-  return #initialized_clients(fresh_buf) > 0
-end, "re-adding an unsaved include did not reattach the managed client")
+edit(fresh)
+if #clients(fresh_buf) == 0 then
+  fail("an unsaved include was not visible on the next BufEnter")
+end
+expected_client(fresh_buf, cart_1_client.id, "re-added include attached another client")
 expected_client(keep_buf, cart_1_client.id, "re-adding an include disturbed another managed buffer")
 
 -- Sibling carts with the same include basename --------------------------------
@@ -324,9 +332,9 @@ expected_client(save_b_buf, save_client.id, "second save-fixture include")
 edit(save_cart)
 set_cart_includes(save_cart_buf, { "b.lua" })
 vim.cmd("silent write")
-wait_for(function()
-  return #clients(save_a_buf) == 0
-end, "saving a cart did not detach a removed include")
+if #clients(save_a_buf) > 0 then
+  fail("saving a cart did not detach a removed include synchronously")
+end
 expected_client(save_b_buf, save_client.id, "saving one include detached another managed buffer")
 if #clients(save_cart_buf) == 0 then
   fail("saving a cart stopped the cart's own client")
@@ -335,9 +343,9 @@ end
 -- Re-adding it and saving reattaches it to the same client.
 set_cart_includes(save_cart_buf, { "a.lua", "b.lua" })
 vim.cmd("silent write")
-wait_for(function()
-  return #initialized_clients(save_a_buf) > 0
-end, "saving a cart did not attach an added include")
+if #clients(save_a_buf) == 0 then
+  fail("saving a cart did not attach an added include synchronously")
+end
 expected_client(save_a_buf, save_client.id, "saved include did not reuse the cart's client")
 
 -- A nearer cart taking ownership moves the managed attachment ------------------
@@ -429,6 +437,60 @@ if #clients(unrelated_buf) > 0 then
   fail("Pico8Refresh attached an unrelated .lua buffer")
 end
 
+-- Unloading a cart revalidates against disk ------------------------------------
+
+local project_u = tmp .. "/project-u"
+local cart_u = project_u .. "/cart.p8"
+local lib_u = project_u .. "/lib.lua"
+write(cart_u, cart_lines("lib.lua"))
+write(lib_u, { "function lib_u() end" })
+
+local cart_u_buf = edit(cart_u)
+wait_for(function()
+  return #initialized_clients(cart_u_buf) > 0
+end, "pico-lsp did not attach to cart U")
+local client_u = initialized_clients(cart_u_buf)[1]
+
+local lib_u_buf = edit(lib_u)
+wait_for(function()
+  return #initialized_clients(lib_u_buf) > 0
+end, "helper did not attach cart U's include")
+expected_client(lib_u_buf, client_u.id, "cart U's include did not use cart U's client")
+
+-- An external removal becomes visible once the cart buffer is unloaded.
+write(cart_u, cart_lines(nil))
+vim.cmd("bunload! " .. cart_u_buf)
+wait_for(function()
+  return #clients(lib_u_buf) == 0
+end, "unloading a cart did not revalidate its includes")
+
+-- Wiping a cart buffer revalidates against disk -------------------------------
+
+local project_w = tmp .. "/project-w"
+local cart_w = project_w .. "/cart.p8"
+local lib_w = project_w .. "/lib.lua"
+write(cart_w, cart_lines("lib.lua"))
+write(lib_w, { "function lib_w() end" })
+
+local cart_w_buf = edit(cart_w)
+wait_for(function()
+  return #initialized_clients(cart_w_buf) > 0
+end, "pico-lsp did not attach to cart W")
+local client_w = initialized_clients(cart_w_buf)[1]
+
+local lib_w_buf = edit(lib_w)
+wait_for(function()
+  return #initialized_clients(lib_w_buf) > 0
+end, "helper did not attach cart W's include")
+expected_client(lib_w_buf, client_w.id, "cart W's include did not use cart W's client")
+
+-- The cart file loses the include externally; wiping the buffer must detach it.
+write(cart_w, cart_lines(nil))
+vim.api.nvim_buf_delete(cart_w_buf, { force = true })
+wait_for(function()
+  return #clients(lib_w_buf) == 0
+end, "wiping a cart did not detach a removed include")
+
 -- Reloading a cart picks up external include changes ---------------------------
 
 local project_d = tmp .. "/project-d"
@@ -458,17 +520,22 @@ end
 -- Reloading the cart rescans the new contents and detaches the stale include.
 edit(cart_d)
 vim.cmd("edit!")
-wait_for(function()
-  return #clients(lib_d_buf) == 0
-end, "reloading a cart did not detach a removed include")
+if #clients(lib_d_buf) > 0 then
+  fail("reloading a cart did not detach a removed include synchronously")
+end
 
 -- Re-adding it externally and reloading reattaches the loaded buffer.
 write(cart_d, cart_lines("lib.lua"))
 vim.cmd("edit!")
-wait_for(function()
-  return #initialized_clients(lib_d_buf) > 0
-end, "reloading a cart did not attach an added include")
+if #clients(lib_d_buf) == 0 then
+  fail("reloading a cart did not attach an added include synchronously")
+end
 expected_client(lib_d_buf, client_d.id, "reloaded include did not reuse cart D's client")
+
+-- A loaded cart buffer remains authoritative when disk disagrees.
+write(cart_d, cart_lines(nil))
+vim.cmd("Pico8Refresh")
+expected_client(lib_d_buf, client_d.id, "Pico8Refresh applied a disk change to a loaded cart buffer")
 
 -- Refresh handles carts that are not loaded ------------------------------------
 
@@ -526,6 +593,30 @@ end, 50) then
   fail("Pico8Refresh created duplicate clients")
 end
 
+-- A same-size external include swap invalidates by mtime ----------------------
+
+local project_g = tmp .. "/project-g"
+local cart_g = project_g .. "/cart.p8"
+local aa_g = project_g .. "/aa.lua"
+local bb_g = project_g .. "/bb.lua"
+write(cart_g, cart_lines("aa.lua"))
+write(aa_g, { "function aa() end" })
+write(bb_g, { "function bb() end" })
+
+local aa_g_buf = edit(aa_g)
+wait_for(function()
+  return #initialized_clients(aa_g_buf) > 0
+end, "helper did not attach the first same-size include")
+local client_g = initialized_clients(aa_g_buf)[1]
+
+-- The cart size stays identical; only its mtime changes.
+write(cart_g, cart_lines("bb.lua"))
+local bb_g_buf = edit(bb_g)
+wait_for(function()
+  return #initialized_clients(bb_g_buf) > 0
+end, "the disk include cache missed a same-size include swap")
+expected_client(bb_g_buf, client_g.id, "same-size swap did not reuse the cart's client")
+
 -- Re-running setup preserves managed attachments -------------------------------
 
 local project_h = tmp .. "/project-h"
@@ -546,12 +637,48 @@ wait_for(function()
 end, "helper did not attach cart H's include")
 expected_client(lib_h_buf, client_h.id, "cart H's include did not use cart H's client")
 
-require("pico_lsp").setup({ lsp = false })
+require("pico_lsp").setup()
+expected_client(fresh_buf, user_client_id, "enabled setup detached a user-managed client")
+expected_client(lib_h_buf, client_h.id, "enabled setup detached a managed client")
 set_cart_includes(cart_h_buf, {})
 fire_text_changed(cart_h_buf)
 wait_for(function()
   return #clients(lib_h_buf) == 0
 end, "re-running setup lost the managed attachment")
+
+-- Renaming a managed buffer detaches its helper-owned client -------------------
+
+local project_r = tmp .. "/project-r"
+local cart_r = project_r .. "/cart.p8"
+local lib_r = project_r .. "/lib.lua"
+local renamed_r = project_r .. "/renamed.txt"
+write(cart_r, cart_lines("lib.lua"))
+write(lib_r, { "function lib_r() end" })
+
+local cart_r_buf = edit(cart_r)
+wait_for(function()
+  return #initialized_clients(cart_r_buf) > 0
+end, "pico-lsp did not attach to cart R")
+local client_r = initialized_clients(cart_r_buf)[1]
+
+local lib_r_buf = edit(lib_r)
+wait_for(function()
+  return #initialized_clients(lib_r_buf) > 0
+end, "helper did not attach cart R's include")
+expected_client(lib_r_buf, client_r.id, "cart R's include did not use cart R's client")
+
+vim.api.nvim_buf_set_name(lib_r_buf, renamed_r)
+vim.cmd("Pico8Refresh")
+if #clients(lib_r_buf) > 0 then
+  fail("Pico8Refresh kept a managed client after the buffer was renamed away from .lua")
+end
+
+-- Buffers that were never included must stay untouched after all rescans.
+for _, bufnr in ipairs({ literal_lib_buf, unrelated_buf }) do
+  if #clients(bufnr) > 0 then
+    fail("a delayed attach reached a buffer that must stay untouched")
+  end
+end
 
 -- Disabled helper --------------------------------------------------------------
 
@@ -564,6 +691,30 @@ end
 expected_client(fresh_buf, user_client_id, "disabling the helper removed a user-managed client")
 if not pcall(vim.cmd, "Pico8Refresh") then
   fail("Pico8Refresh errored when the helper was disabled")
+end
+
+local disabled_count = #all_clients()
+local png_fixture = root .. "/tests/fixtures/smoke.p8.png"
+if vim.fn.filereadable(png_fixture) == 1 then
+  if not pcall(vim.cmd, "Pico8OpenPng " .. vim.fn.fnameescape(png_fixture)) then
+    fail("Pico8OpenPng errored when the helper was disabled")
+  end
+  if #all_clients() ~= disabled_count then
+    fail("Pico8OpenPng started a client when the helper was disabled")
+  end
+end
+
+edit(fresh)
+local before_glyph = vim.api.nvim_buf_get_lines(fresh_buf, 0, -1, false)
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+if not pcall(vim.cmd, "Pico8InsertGlyph left") then
+  fail("Pico8InsertGlyph errored when the helper was disabled")
+end
+if vim.inspect(vim.api.nvim_buf_get_lines(fresh_buf, 0, -1, false)) ~= vim.inspect(before_glyph) then
+  fail("Pico8InsertGlyph modified a buffer when the helper was disabled")
+end
+if #all_clients() ~= disabled_count then
+  fail("disabled commands changed the client count")
 end
 
 -- Cleanup ----------------------------------------------------------------------

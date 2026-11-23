@@ -37,7 +37,7 @@ the helper never attaches the first cart's client to the second cart's include.
 | D3 | Client reuse | Reuse an existing `pico_lsp` client only when its normalized root matches the target cart directory. Otherwise start a client for that root. |
 | D4 | Ownership | Store helper-managed attachments in a buffer map containing the client ID, root, and owning cart. Explicitly attaching an existing client creates a managed record. Never detach a client that is not recorded as managed for that buffer. |
 | D5 | Revalidation | On cart save and debounced cart edits, recompute ownership for loaded managed `.lua` buffers. Detach when the owning cart disappears or changes root, then attach the new owner if one exists. |
-| D6 | Rescan triggers | `BufWritePost` and `BufReadPost` for carts, `BufUnload` cache invalidation, debounced `TextChanged`/`TextChangedI` for loaded carts, `BufEnter`/`FileType` for Lua buffers, and an explicit `:Pico8Refresh`. |
+| D6 | Rescan triggers | `BufWritePost` and `BufReadPost` for carts, `BufUnload`/`BufWipeout` cache invalidation and revalidation, debounced `TextChanged`/`TextChangedI` for loaded carts, `BufEnter`/`FileType` for Lua buffers, and an explicit `:Pico8Refresh`. |
 | D7 | Debounce | Coalesce cart-edit rescans for 250–500 ms. A rescan must not run synchronously on every keystroke. |
 | D8 | Missing binary | Keep one warning per session. Do not emit a warning for every `.lua` buffer that cannot attach. |
 | D9 | CI | Extend the headless Neovim job from M25 with the correctness cases in this milestone. |
@@ -49,12 +49,13 @@ the helper never attaches the first cart's client to the second cart's include.
 - **D2/D6:** `:Pico8Refresh` is registered even when the helper is disabled and
   reports that state without scanning. A loaded cart buffer remains
   authoritative, so an external change to a loaded cart requires reloading it
-  (`:edit!`) or unloading it; `BufReadPost` and `BufUnload` keep the cache in
-  step with that reload.
+  (`:edit!`); `BufReadPost` rescans the new contents, and `BufUnload` drops
+  cached data and revalidates.
 - **D4:** a buffer that already has a user-started `pico_lsp` client is left
   untouched; the helper never adds a second client or claims that attachment.
-- **D4/D5:** an enabled re-`setup()` preserves managed records; disabling the
-  helper detaches the records it owns and only those.
+- **D4/D5:** an enabled re-`setup()` preserves managed records without
+  re-running the native enable sweep; disabling the helper detaches the records
+  it owns and only those.
 
 ## Scope
 
@@ -172,7 +173,8 @@ the helper never attaches the first cart's client to the second cart's include.
 
 - Keep the existing `BufWritePost` cart rescan.
 - Rescan when a cart is reloaded (`BufReadPost`) so `:edit!` sees external
-  include changes, and drop cached data when a cart is unloaded (`BufUnload`).
+  include changes, and revalidate after a cart is unloaded (`BufUnload`) or
+  wiped (`BufWipeout`).
 - Add a debounced cart-edit rescan so a new or removed `#include` takes effect
   without saving.
 - Use one timer or generation counter per cart; a new edit restarts the
@@ -197,10 +199,9 @@ the helper never attaches the first cart's client to the second cart's include.
 
 - Explain that unsaved include edits are visible to the helper.
 - Document that a loaded cart buffer is authoritative. After an external change
-  to an open cart, reload it with `:edit!` or unload it; the helper rescans on
-  reload. `:Pico8Refresh` does not reload cart buffers.
-- Document `:Pico8Refresh` for carts that are not loaded or for changes that did
-  not reload the buffer.
+  to an open cart, reload it with `:edit!`; the helper rescans on reload.
+  `:Pico8Refresh` does not reload cart buffers.
+- Document `:Pico8Refresh` for carts that are not loaded.
 - Document that the helper only detaches clients it manages.
 - Add a troubleshooting entry for a stale include attachment and the refresh
   command.
@@ -241,12 +242,20 @@ the helper never attaches the first cart's client to the second cart's include.
   - saving a cart and asserting a removed include detaches and an added include
     reattaches;
   - reloading a cart with `:edit!` and asserting external include changes take
-    effect;
+    effect immediately;
+  - unloading or wiping a cart and asserting its includes are revalidated
+    against disk;
   - externally changing a cart that is not loaded and asserting the disk include
-    cache notices the change;
-  - re-running setup while enabled and asserting managed attachments survive;
+    cache notices the change, including a same-size include swap;
+  - asserting a loaded cart buffer stays authoritative for `:Pico8Refresh` when
+    disk disagrees;
+  - renaming a managed `.lua` buffer and asserting the helper client detaches;
+  - re-running an enabled setup and asserting managed attachments and
+    user-started clients survive;
   - disabling the helper and asserting managed attachments detach while a
     user-started client remains;
+  - invoking disabled commands and asserting they do not start clients or edit
+    buffers;
   - removing an include and asserting the managed client detaches;
   - starting a `pico_lsp` client directly on an included `.lua` buffer,
     removing the include, and asserting the user-started client remains
@@ -266,9 +275,12 @@ the helper never attaches the first cart's client to the second cart's include.
 - [x] An unsaved `#include` attaches the included `.lua` buffer.
 - [x] Editing or removing an include updates managed attachments after the
       debounce.
-- [x] Saving or reloading a cart applies its new include list immediately.
-- [x] Re-running setup while enabled preserves managed attachments, and
-      disabling the helper detaches only its managed attachments.
+- [x] Saving or reloading a cart applies its new include list immediately, and
+      unloading or wiping it revalidates against disk.
+- [x] Renaming a managed `.lua` buffer detaches its helper-owned client.
+- [x] Re-running setup while enabled preserves managed attachments and
+      user-started clients, and disabling the helper detaches only its managed
+      attachments.
 - [x] Clients are reused only for the matching cart root.
 - [x] Multiple carts in sibling directories do not cross-attach.
 - [x] Repeated buffer entry does not create duplicate clients.
