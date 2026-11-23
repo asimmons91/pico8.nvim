@@ -465,6 +465,7 @@ end
 
 function M.open_png(path)
   if M.disabled then
+    notify("helper is disabled", vim.log.levels.INFO)
     return
   end
   path = path or vim.api.nvim_buf_get_name(0)
@@ -495,6 +496,10 @@ local function glyph_label(item)
 end
 
 function M.insert_glyph(name)
+  if M.disabled then
+    notify("helper is disabled", vim.log.levels.INFO)
+    return
+  end
   local bufnr = vim.api.nvim_get_current_buf()
   local client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })[1]
   if not client then
@@ -613,6 +618,10 @@ function M.install_glyph_maps(bufnr)
 end
 
 function M.reload_png()
+  if M.disabled then
+    notify("helper is disabled", vim.log.levels.INFO)
+    return
+  end
   local buf = vim.api.nvim_get_current_buf()
   local info = M.png_buffers[buf]
   if not info then
@@ -738,7 +747,9 @@ end
 local function revalidate_managed()
   local pending = {}
   for bufnr in pairs(managed) do
-    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "lua" then
+    local loaded = vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr)
+    local name = loaded and vim.api.nvim_buf_get_name(bufnr) or ""
+    if loaded and name ~= "" and name:sub(-4):lower() == ".lua" then
       pending[#pending + 1] = bufnr
     else
       managed[bufnr] = nil
@@ -854,6 +865,32 @@ local function on_cart_edit(cart)
   schedule_rescan(cart)
 end
 
+-- A cart that was written or reloaded has new authoritative buffer contents.
+-- Drop its cached includes and rescan now; this is also what makes `:edit!`
+-- pick up an external change without waiting for :Pico8Refresh.
+local function rescan_cart(bufnr)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then
+    return
+  end
+  local cart = normalize(name)
+  close_rescan_timer(cart)
+  invalidate_cart(cart)
+  rescan()
+end
+
+-- An unloaded or deleted cart buffer no longer supplies include data. Drop its
+-- cache so the next lookup reads disk instead of a stale loaded-buffer entry.
+local function forget_cart(bufnr)
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then
+    return
+  end
+  local cart = normalize(name)
+  close_rescan_timer(cart)
+  invalidate_cart(cart)
+end
+
 function M.refresh()
   if M.disabled then
     notify("helper is disabled", vim.log.levels.INFO)
@@ -867,7 +904,13 @@ function M.refresh()
   notify("include cache cleared; loaded buffers rescanned", vim.log.levels.INFO)
 end
 
-local function define_commands()
+local function define_commands(enabled)
+  vim.api.nvim_create_user_command("Pico8Refresh", function()
+    M.refresh()
+  end, { nargs = 0, desc = "Clear the pico-lsp include cache and rescan loaded buffers" })
+  if not enabled then
+    return
+  end
   vim.api.nvim_create_user_command("Pico8OpenPng", function(args)
     M.open_png(args.args ~= "" and args.args or nil)
   end, { nargs = "?" })
@@ -875,9 +918,6 @@ local function define_commands()
   vim.api.nvim_create_user_command("Pico8InsertGlyph", function(args)
     M.insert_glyph(args.args ~= "" and args.args or nil)
   end, { nargs = "?" })
-  vim.api.nvim_create_user_command("Pico8Refresh", function()
-    M.refresh()
-  end, { nargs = 0, desc = "Clear the pico-lsp include cache and rescan loaded buffers" })
 end
 
 function M.setup(opts)
@@ -889,14 +929,26 @@ function M.setup(opts)
   include_cache = {}
   include_cache_order = {}
   owner_cache = {}
-  managed = {}
+  -- Preserve managed attachments across an enabled re-setup (config reload or
+  -- plugin reload). Disabling the helper is a shutdown: detach only the clients
+  -- it recorded, then clear the state.
+  if M.disabled then
+    local buffers = {}
+    for bufnr in pairs(managed) do
+      buffers[#buffers + 1] = bufnr
+    end
+    for _, bufnr in ipairs(buffers) do
+      detach_managed(bufnr, managed[bufnr])
+    end
+    managed = {}
+  end
 
   if M.group then
     pcall(vim.api.nvim_del_augroup_by_id, M.group)
     M.group = nil
   end
 
-  define_commands()
+  define_commands(not M.disabled)
 
   if M.disabled then
     return
@@ -948,14 +1000,21 @@ function M.setup(opts)
     group = M.group,
     pattern = "*.p8",
     callback = function(args)
-      local name = vim.api.nvim_buf_get_name(args.buf)
-      if name == "" then
-        return
-      end
-      local cart = normalize(name)
-      close_rescan_timer(cart)
-      invalidate_cart(cart)
-      rescan()
+      rescan_cart(args.buf)
+    end,
+  })
+  vim.api.nvim_create_autocmd("BufReadPost", {
+    group = M.group,
+    pattern = "*.p8",
+    callback = function(args)
+      rescan_cart(args.buf)
+    end,
+  })
+  vim.api.nvim_create_autocmd("BufUnload", {
+    group = M.group,
+    pattern = "*.p8",
+    callback = function(args)
+      forget_cart(args.buf)
     end,
   })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {

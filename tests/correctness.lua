@@ -1,7 +1,8 @@
 -- Headless test for the M26 helper correctness work.
 --
--- Covers unsaved includes, debounced ownership changes, per-root client reuse,
--- managed detach, user-started clients, and :Pico8Refresh.
+-- Covers unsaved includes, multi-include isolation, save and reload rescans,
+-- debounced ownership changes, per-root client reuse, managed detach,
+-- user-started clients, setup re-entry, and :Pico8Refresh.
 --
 -- Run with tests/run.sh against a real pico-lsp binary:
 --   PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
@@ -24,17 +25,25 @@ local function write(path, lines)
   vim.fn.writefile(lines, path)
 end
 
-local function cart_lines(include)
+local function cart_lines(includes)
+  local list = includes
+  if type(list) == "string" then
+    list = { list }
+  end
   local lines = {
     "pico-8 cartridge // pico-8.com",
     "version 42",
     "__lua__",
   }
-  if include then
+  for _, include in ipairs(list or {}) do
     lines[#lines + 1] = '#include "' .. include .. '"'
   end
   lines[#lines + 1] = "x = 1"
   return lines
+end
+
+local function set_cart_includes(bufnr, includes)
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, cart_lines(includes))
 end
 
 local function edit(path)
@@ -52,6 +61,10 @@ end
 
 local function initialized_clients(bufnr)
   return vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })
+end
+
+local function all_clients()
+  return vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true })
 end
 
 local function root_of(client)
@@ -74,9 +87,20 @@ local function assert_root(client, directory, message)
   end
 end
 
+local function expected_client(bufnr, client_id, message)
+  local attached = clients(bufnr)
+  if #attached ~= 1 or attached[1].id ~= client_id then
+    local ids = {}
+    for _, client in ipairs(attached) do
+      ids[#ids + 1] = tostring(client.id)
+    end
+    fail(message .. ": expected client " .. client_id .. ", found [" .. table.concat(ids, ",") .. "]")
+  end
+end
+
 local function count_by_root()
   local seen = {}
-  for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp" })) do
+  for _, client in ipairs(all_clients()) do
     local root = root_of(client)
     seen[root] = (seen[root] or 0) + 1
   end
@@ -97,8 +121,10 @@ end
 local project_1 = tmp .. "/project-1"
 local cart_1 = project_1 .. "/cart.p8"
 local fresh = project_1 .. "/fresh.lua"
+local keep = project_1 .. "/keep.lua"
 write(cart_1, cart_lines(nil))
 write(fresh, { "function fresh() end" })
+write(keep, { "function keep() end" })
 
 local cart_1_buf = edit(cart_1)
 wait_for(function()
@@ -107,8 +133,8 @@ end, "pico-lsp did not attach to the first cart")
 local cart_1_client = initialized_clients(cart_1_buf)[1]
 assert_root(cart_1_client, project_1, "first cart")
 
--- Add the include without saving. The cart buffer is the source of truth.
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 3, false, { '#include "fresh.lua"' })
+-- Add two includes without saving. The cart buffer is the source of truth.
+set_cart_includes(cart_1_buf, { "fresh.lua", "keep.lua" })
 fire_text_changed(cart_1_buf)
 for _, line in ipairs(vim.fn.readfile(cart_1)) do
   if line:find("#include", 1, true) then
@@ -126,19 +152,33 @@ if fresh_client.id ~= cart_1_client.id then
 end
 assert_root(fresh_client, project_1, "unsaved include")
 
--- Removing the include without saving detaches the managed client.
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 4, false, {})
+local keep_buf = edit(keep)
+wait_for(function()
+  return #initialized_clients(keep_buf) > 0
+end, "the second unsaved #include did not attach")
+expected_client(keep_buf, cart_1_client.id, "the second unsaved include used another client")
+
+-- Removing only one include must not disturb the other managed buffer.
+set_cart_includes(cart_1_buf, { "keep.lua" })
 fire_text_changed(cart_1_buf)
+if #clients(fresh_buf) == 0 then
+  fail("an unsaved cart edit detached synchronously instead of debouncing")
+end
 wait_for(function()
   return #clients(fresh_buf) == 0
 end, "removing an unsaved include did not detach the managed client")
+expected_client(keep_buf, cart_1_client.id, "removing one include detached another managed buffer")
+if #clients(cart_1_buf) == 0 then
+  fail("removing an include stopped the cart's own client")
+end
 
--- Adding it back without saving reattaches after the debounce.
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 3, false, { '#include "fresh.lua"' })
-fire_text_changed(cart_1_buf)
+-- Adding it back through TextChangedI reattaches after the debounce.
+set_cart_includes(cart_1_buf, { "fresh.lua", "keep.lua" })
+vim.api.nvim_exec_autocmds("TextChangedI", { buffer = cart_1_buf })
 wait_for(function()
   return #initialized_clients(fresh_buf) > 0
 end, "re-adding an unsaved include did not reattach the managed client")
+expected_client(keep_buf, cart_1_client.id, "re-adding an include disturbed another managed buffer")
 
 -- Sibling carts with the same include basename --------------------------------
 
@@ -188,31 +228,40 @@ end
 assert_root(lib_b_client, project_b, "second project's include")
 
 -- Repeated buffer entry does not create duplicate clients.
-local before = #vim.lsp.get_clients({ name = "pico_lsp" })
+local before = #all_clients()
 for _ = 1, 5 do
   edit(cart_a)
   edit(lib_a)
   edit(cart_b)
   edit(lib_b)
 end
-wait_for(function()
-  return #vim.lsp.get_clients({ name = "pico_lsp" }) == before
-end, "repeated buffer entry changed the client count")
-for root_path, count in pairs(count_by_root()) do
+if vim.wait(500, function()
+  return #all_clients() ~= before
+end, 50) then
+  fail("repeated buffer entry changed the client count")
+end
+local roots = count_by_root()
+for root_path, count in pairs(roots) do
   if count > 1 then
     fail("found " .. count .. " clients for root " .. root_path)
   end
 end
+if (roots[vim.fs.normalize(project_a)] or 0) ~= 1 then
+  fail("repeated buffer entry lost cart A's client")
+end
+if (roots[vim.fs.normalize(project_b)] or 0) ~= 1 then
+  fail("repeated buffer entry lost cart B's client")
+end
 
 -- User-started clients are never detached -------------------------------------
 
--- Remove the include from project 1 without saving, then attach a client to the
--- Lua buffer directly. The helper must not claim that attachment.
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 4, false, {})
+-- Remove all includes from project 1, then attach a client to the Lua buffer
+-- directly. The helper must not claim that attachment.
+set_cart_includes(cart_1_buf, {})
 fire_text_changed(cart_1_buf)
 wait_for(function()
-  return #clients(fresh_buf) == 0
-end, "removing the include before the user-client case did not detach")
+  return #clients(fresh_buf) == 0 and #clients(keep_buf) == 0
+end, "removing the includes before the user-client case did not detach")
 
 local user_root = project_1 .. "/user-root"
 vim.fn.mkdir(user_root, "p")
@@ -229,28 +278,67 @@ local user_client = initialized_clients(fresh_buf)[1]
 local user_client_id = user_client.id
 assert_root(user_client, user_root, "user-managed client")
 
--- Re-adding and removing the include must leave the user client alone, even
--- after the debounce would have rescanned. The helper must not add the cart's
--- client alongside it.
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 3, false, { '#include "fresh.lua"' })
+-- Re-adding and removing the include must leave the user client alone after a
+-- full rescan. The helper must not add the cart's client alongside it.
+set_cart_includes(cart_1_buf, { "fresh.lua" })
 fire_text_changed(cart_1_buf)
-if vim.wait(1200, function()
-  return #clients(fresh_buf) ~= 1
-end, 50) then
-  fail("the helper changed a user-managed attachment when the include was added")
+vim.cmd("Pico8Refresh")
+expected_client(fresh_buf, user_client_id, "the helper changed a user-managed attachment when the include was added")
+assert_root(clients(fresh_buf)[1], user_root, "user-managed client after include add")
+
+set_cart_includes(cart_1_buf, {})
+fire_text_changed(cart_1_buf)
+vim.cmd("Pico8Refresh")
+expected_client(fresh_buf, user_client_id, "the helper detached a user-managed client when the include was removed")
+assert_root(clients(fresh_buf)[1], user_root, "user-managed client after include removal")
+
+-- Saving a cart rescans immediately -------------------------------------------
+
+local project_s = tmp .. "/project-s"
+local save_cart = project_s .. "/cart.p8"
+local save_a = project_s .. "/a.lua"
+local save_b = project_s .. "/b.lua"
+write(save_cart, cart_lines({ "a.lua", "b.lua" }))
+write(save_a, { "function save_a() end" })
+write(save_b, { "function save_b() end" })
+
+local save_cart_buf = edit(save_cart)
+wait_for(function()
+  return #initialized_clients(save_cart_buf) > 0
+end, "pico-lsp did not attach to the save fixture cart")
+local save_client = initialized_clients(save_cart_buf)[1]
+
+local save_a_buf = edit(save_a)
+wait_for(function()
+  return #initialized_clients(save_a_buf) > 0
+end, "helper did not attach the first save-fixture include")
+expected_client(save_a_buf, save_client.id, "first save-fixture include")
+
+local save_b_buf = edit(save_b)
+wait_for(function()
+  return #initialized_clients(save_b_buf) > 0
+end, "helper did not attach the second save-fixture include")
+expected_client(save_b_buf, save_client.id, "second save-fixture include")
+
+-- Removing one include and saving detaches it without affecting the other.
+edit(save_cart)
+set_cart_includes(save_cart_buf, { "b.lua" })
+vim.cmd("silent write")
+wait_for(function()
+  return #clients(save_a_buf) == 0
+end, "saving a cart did not detach a removed include")
+expected_client(save_b_buf, save_client.id, "saving one include detached another managed buffer")
+if #clients(save_cart_buf) == 0 then
+  fail("saving a cart stopped the cart's own client")
 end
 
-vim.api.nvim_buf_set_lines(cart_1_buf, 3, 4, false, {})
-fire_text_changed(cart_1_buf)
-if vim.wait(1200, function()
-  return #clients(fresh_buf) == 0
-end, 50) then
-  fail("the helper detached a user-managed client when the include was removed")
-end
-if #clients(fresh_buf) ~= 1 or clients(fresh_buf)[1].id ~= user_client_id then
-  fail("the user-managed client was replaced")
-end
-assert_root(clients(fresh_buf)[1], user_root, "user-managed client after removal")
+-- Re-adding it and saving reattaches it to the same client.
+set_cart_includes(save_cart_buf, { "a.lua", "b.lua" })
+vim.cmd("silent write")
+wait_for(function()
+  return #initialized_clients(save_a_buf) > 0
+end, "saving a cart did not attach an added include")
+expected_client(save_a_buf, save_client.id, "saved include did not reuse the cart's client")
 
 -- A nearer cart taking ownership moves the managed attachment ------------------
 
@@ -302,6 +390,10 @@ wait_for(function()
   return #attached == 1 and attached[1].id == client_e.id
 end, "the helper did not return the attachment to the parent cart's root")
 
+-- Unrelated cart edits must not disturb earlier managed attachments.
+expected_client(lib_a_buf, client_a.id, "editing cart E changed cart A's include attachment")
+expected_client(lib_b_buf, client_b.id, "editing cart E changed cart B's include attachment")
+
 -- A .lua path with a tab-like suffix is literal --------------------------------
 
 local literal = tmp .. "/literal"
@@ -316,10 +408,12 @@ wait_for(function()
 end, "pico-lsp did not attach to the literal-suffix cart")
 
 local literal_lib_buf = edit(literal_lib)
-if vim.wait(1200, function()
-  return #clients(literal_lib_buf) > 0
-end, 50) then
+if #clients(literal_lib_buf) > 0 then
   fail("the helper treated a .lua:2 include as a tab selector")
+end
+vim.cmd("Pico8Refresh")
+if #clients(literal_lib_buf) > 0 then
+  fail("Pico8Refresh treated a .lua:2 include as a tab selector")
 end
 
 -- Unrelated Lua files stay untouched ------------------------------------------
@@ -327,13 +421,15 @@ end
 local unrelated = tmp .. "/other.lua"
 write(unrelated, { "print('unrelated')" })
 local unrelated_buf = edit(unrelated)
-if vim.wait(1200, function()
-  return #clients(unrelated_buf) > 0
-end, 50) then
+if #clients(unrelated_buf) > 0 then
   fail("the helper attached an unrelated .lua buffer")
 end
+vim.cmd("Pico8Refresh")
+if #clients(unrelated_buf) > 0 then
+  fail("Pico8Refresh attached an unrelated .lua buffer")
+end
 
--- Refresh handles an external cart change and stays idempotent -----------------
+-- Reloading a cart picks up external include changes ---------------------------
 
 local project_d = tmp .. "/project-d"
 local cart_d = project_d .. "/cart.p8"
@@ -351,34 +447,121 @@ local lib_d_buf = edit(lib_d)
 wait_for(function()
   return #initialized_clients(lib_d_buf) > 0
 end, "helper did not attach cart D's include")
-if initialized_clients(lib_d_buf)[1].id ~= client_d.id then
-  fail("cart D's include did not use cart D's client")
+expected_client(lib_d_buf, client_d.id, "cart D's include did not use cart D's client")
+
+-- An external change is not observed while the loaded buffer is authoritative.
+write(cart_d, cart_lines(nil))
+if #clients(lib_d_buf) == 0 then
+  fail("an external disk change was observed without reloading the cart")
 end
 
--- An external tool removes the include. Dropping the loaded cart buffer makes
--- the helper read the file from disk; refresh then detaches the stale include.
-write(cart_d, cart_lines(nil))
-vim.api.nvim_buf_delete(cart_d_buf, { force = true })
-if not pcall(vim.cmd, "Pico8Refresh") then
-  fail("Pico8Refresh errored after an external cart change")
-end
+-- Reloading the cart rescans the new contents and detaches the stale include.
+edit(cart_d)
+vim.cmd("edit!")
 wait_for(function()
   return #clients(lib_d_buf) == 0
-end, "Pico8Refresh did not detach a stale include")
+end, "reloading a cart did not detach a removed include")
+
+-- Re-adding it externally and reloading reattaches the loaded buffer.
+write(cart_d, cart_lines("lib.lua"))
+vim.cmd("edit!")
+wait_for(function()
+  return #initialized_clients(lib_d_buf) > 0
+end, "reloading a cart did not attach an added include")
+expected_client(lib_d_buf, client_d.id, "reloaded include did not reuse cart D's client")
+
+-- Refresh handles carts that are not loaded ------------------------------------
+
+local project_f = tmp .. "/project-f"
+local cart_f = project_f .. "/cart.p8"
+local lib_f = project_f .. "/lib.lua"
+local lib_f2 = project_f .. "/lib2.lua"
+write(cart_f, cart_lines(nil))
+write(lib_f, { "function lib_f() end" })
+write(lib_f2, { "function lib_f2() end" })
+
+local lib_f_buf = edit(lib_f)
+if #clients(lib_f_buf) > 0 then
+  fail("the helper attached a buffer with no include")
+end
+
+-- An external addition must invalidate the disk include cache. Opening lib2
+-- also exercises the helper-started client branch with the cart directory root.
+write(cart_f, cart_lines("lib2.lua"))
+local lib_f2_buf = edit(lib_f2)
+wait_for(function()
+  return #initialized_clients(lib_f2_buf) > 0
+end, "the disk include cache did not notice an externally added include")
+local client_f = initialized_clients(lib_f2_buf)[1]
+assert_root(client_f, project_f, "helper-started disk client")
+
+-- The still-unincluded buffer stays untouched.
+edit(lib_f)
+if #clients(lib_f_buf) > 0 then
+  fail("the helper attached a buffer that is not included")
+end
+
+-- Refresh attaches a newly included loaded buffer to the existing client.
+write(cart_f, cart_lines({ "lib.lua", "lib2.lua" }))
+vim.cmd("Pico8Refresh")
+wait_for(function()
+  return #initialized_clients(lib_f_buf) > 0
+end, "Pico8Refresh did not attach a newly included buffer")
+expected_client(lib_f_buf, client_f.id, "Pico8Refresh did not reuse the cart F client")
+
+-- Refresh detaches removed includes when the cart is not loaded.
+write(cart_f, cart_lines(nil))
+vim.cmd("Pico8Refresh")
+wait_for(function()
+  return #clients(lib_f_buf) == 0 and #clients(lib_f2_buf) == 0
+end, "Pico8Refresh did not detach removed includes")
 
 -- Refresh is idempotent and does not duplicate clients.
-local refresh_count = #vim.lsp.get_clients({ name = "pico_lsp" })
+local refresh_count = #all_clients()
 vim.cmd("Pico8Refresh")
 vim.cmd("Pico8Refresh")
 if vim.wait(500, function()
-  return #vim.lsp.get_clients({ name = "pico_lsp" }) ~= refresh_count
+  return #all_clients() ~= refresh_count
 end, 50) then
   fail("Pico8Refresh created duplicate clients")
 end
 
+-- Re-running setup preserves managed attachments -------------------------------
+
+local project_h = tmp .. "/project-h"
+local cart_h = project_h .. "/cart.p8"
+local lib_h = project_h .. "/lib.lua"
+write(cart_h, cart_lines("lib.lua"))
+write(lib_h, { "function lib_h() end" })
+
+local cart_h_buf = edit(cart_h)
+wait_for(function()
+  return #initialized_clients(cart_h_buf) > 0
+end, "pico-lsp did not attach to cart H")
+local client_h = initialized_clients(cart_h_buf)[1]
+
+local lib_h_buf = edit(lib_h)
+wait_for(function()
+  return #initialized_clients(lib_h_buf) > 0
+end, "helper did not attach cart H's include")
+expected_client(lib_h_buf, client_h.id, "cart H's include did not use cart H's client")
+
+require("pico_lsp").setup({ lsp = false })
+set_cart_includes(cart_h_buf, {})
+fire_text_changed(cart_h_buf)
+wait_for(function()
+  return #clients(lib_h_buf) == 0
+end, "re-running setup lost the managed attachment")
+
 -- Disabled helper --------------------------------------------------------------
 
 require("pico_lsp").setup({ disable = true })
+for _, bufnr in ipairs({ lib_a_buf, lib_b_buf, save_a_buf, save_b_buf, lib_d_buf, shared_e_buf }) do
+  if #clients(bufnr) > 0 then
+    fail("disabling the helper left a managed attachment")
+  end
+end
+expected_client(fresh_buf, user_client_id, "disabling the helper removed a user-managed client")
 if not pcall(vim.cmd, "Pico8Refresh") then
   fail("Pico8Refresh errored when the helper was disabled")
 end
@@ -386,14 +569,14 @@ end
 -- Cleanup ----------------------------------------------------------------------
 
 vim.lsp.enable("pico_lsp", false)
-for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true })) do
+for _, client in ipairs(all_clients()) do
   client:stop(true)
 end
 if not vim.wait(3000, function()
-  return #vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true }) == 0
+  return #all_clients() == 0
 end, 25) then
   local remaining = {}
-  for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true })) do
+  for _, client in ipairs(all_clients()) do
     remaining[#remaining + 1] = string.format(
       "id=%d root=%s initialized=%s stopped=%s",
       client.id,

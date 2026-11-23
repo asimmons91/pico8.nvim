@@ -15,8 +15,9 @@
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
-  rescans cart edits after a 300 ms debounce. `:Pico8Refresh` clears the cache
-  and rescans; it is registered even when the helper is disabled.
+  rescans cart saves/reloads plus cart edits after a 300 ms debounce.
+  `:Pico8Refresh` clears the cache and rescans; it is registered even when the
+  helper is disabled. An enabled re-`setup()` preserves managed records.
 - `pico-lsp` remains the source of truth for the server, parser, analysis,
   formatter, diagnostics, and standard LSP capabilities. Do not add server code
   here.

@@ -45,8 +45,9 @@ repository is the canonical client source.
   activation, merged helper config, config/root tests, CI matrix, and install
   documentation.
 - M26 is complete: buffer-aware include discovery and caching, root-matched
-  client reuse, managed detach and ownership revalidation, debounced cart-edit
-  rescans, and `:Pico8Refresh`.
+  client reuse, managed detach and ownership revalidation, save/reload and
+  debounced cart-edit rescans, `:Pico8Refresh`, and setup re-entry that keeps
+  managed attachments.
 - M27–M32 and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
@@ -125,8 +126,9 @@ config does not walk to `.git`; users can override `root_dir` for
 repository-wide symbols.
 
 M26's implementation choices were confirmed on 2026-11-23: a 300 ms debounce,
-`:Pico8Refresh` registered even when the helper is disabled, and existing
-user-started `pico_lsp` clients left untouched.
+`:Pico8Refresh` registered even when the helper is disabled, existing
+user-started `pico_lsp` clients left untouched, and a loaded cart buffer kept
+authoritative so external changes require a cart reload.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

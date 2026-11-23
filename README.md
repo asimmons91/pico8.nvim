@@ -115,8 +115,8 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - Carts in plain, non-git directories use the cart directory as the client
   root; carts in different directories get separate roots.
 - Cart-owned `.lua` files attach through the helper. An unsaved `#include` is
-  visible immediately, cart edits are rescanned after a short debounce, and the
-  helper only detaches clients it manages.
+  visible immediately, cart saves and edits are rescanned, and the helper only
+  detaches clients it manages.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
   glyph maps work for `.p8` carts.
 - Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.

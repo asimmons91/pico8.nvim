@@ -55,7 +55,8 @@ It:
 - ignores unrelated `.lua` buffers;
 - reuses a client only when its root matches the cart directory, so carts in
   sibling directories never cross-attach;
-- rescans loaded `.lua` buffers after a cart save and 300 ms after cart edits;
+- rescans loaded `.lua` buffers after a cart save or reload and 300 ms after
+  cart edits;
 - records the attachments it creates and detaches only those when an include
   disappears or moves to a cart with a different root.
 
@@ -63,12 +64,17 @@ If a `.lua` buffer already has a `pico_lsp` client, the helper leaves it alone.
 That includes clients you start yourself. The helper never detaches an
 attachment it did not record.
 
-Use `:Pico8Refresh` to clear the include cache and rescan loaded buffers after
-an external tool changes a cart:
+Use `:Pico8Refresh` to clear cached include data and rescan loaded `.lua`
+buffers:
 
 ```vim
 :Pico8Refresh
 ```
+
+A loaded cart buffer is authoritative. After an external tool changes an open
+cart, reload it with `:edit!` (or unload it); the helper rescans on reload.
+`:Pico8Refresh` does not reload cart buffers, so use it for carts that are not
+loaded or after an external change that did not reload the buffer.
 
 The command is safe with no carts open and when the helper is disabled; in the
 disabled case it reports that state and does no scanning.
@@ -81,6 +87,10 @@ require("pico_lsp").setup({ disable = true })
 ```
 
 or `vim.g.pico_lsp_helper_disabled = 1`.
+
+Disabling detaches the cart-owned `.lua` attachments the helper created. A
+`pico_lsp` client you started yourself remains attached, and the other helper
+commands report that the helper is disabled instead of acting.
 
 The `.p8` ftplugin sets PICO-8 comment options for carts:
 

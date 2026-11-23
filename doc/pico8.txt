@@ -17,11 +17,11 @@ git repository. Carts in different directories use separate clients. Override
 `root_dir` with `vim.lsp.config("pico_lsp", { ... })` before opening a cart
 for repository-wide symbols.
 
-A loaded cart buffer is the helper's include source, so an unsaved `#include`
-is visible as soon as the included file is opened. Cart saves and edits
-(after a 300 ms debounce) rescan loaded `.lua` buffers. Use `:Pico8Refresh`
-after an external change. The helper only detaches attachments it created; a
-client started by the user is left alone.
+A loaded cart buffer is the helper's include source. Reload an open cart with
+`:edit!` after an external change; the helper rescans on reload.
+`:Pico8Refresh` clears cached include data and rescans loaded `.lua` buffers;
+it does not reload a cart buffer. The helper only detaches attachments it
+created; a client started by the user is left alone.
 
 Options:
     `cmd`           server command (string, list, or function)
