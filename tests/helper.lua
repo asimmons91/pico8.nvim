@@ -294,11 +294,23 @@ if #vim.lsp.get_clients({ name = "pico_lsp", bufnr = 0 }) > 0 then
   fail("helper attached an unrelated .lua buffer")
 end
 
+-- Neovim 0.11 expands every buffer name as a filesystem path, so a
+-- pico8-cart: URI gains a <cwd>/ prefix. Neovim 0.12 preserves URI buffer
+-- names. Assert the tracked virtual URI instead of relying on the raw name.
+local function is_virtual_png_buffer(bufnr)
+  local info = require("pico_lsp").png_buffers[bufnr]
+  if not info or info.virtual:match("^pico8%-cart:") == nil then
+    return false
+  end
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  return name == info.virtual or name == vim.fn.fnamemodify(info.virtual, ":p")
+end
+
 local png_fixture = root .. "/tests/fixtures/smoke.p8.png"
 if vim.fn.filereadable(png_fixture) == 1 then
   vim.cmd("Pico8OpenPng " .. vim.fn.fnameescape(png_fixture))
   if not vim.wait(5000, function()
-    return vim.api.nvim_buf_get_name(0):match("^pico8%-cart:") ~= nil
+    return is_virtual_png_buffer(vim.api.nvim_get_current_buf())
       and #vim.lsp.get_clients({ name = "pico_lsp", bufnr = 0 }) > 0
   end, 50) then
     fail("Pico8OpenPng did not open an attached virtual buffer")
@@ -307,7 +319,7 @@ if vim.fn.filereadable(png_fixture) == 1 then
     fail("Pico8OpenPng opened a modifiable buffer")
   end
   vim.cmd("Pico8ReloadPng")
-  if vim.api.nvim_buf_get_name(0):match("^pico8%-cart:") == nil then
+  if not is_virtual_png_buffer(vim.api.nvim_get_current_buf()) then
     fail("Pico8ReloadPng replaced the virtual buffer")
   end
 end
