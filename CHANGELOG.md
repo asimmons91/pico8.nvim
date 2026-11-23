@@ -10,5 +10,8 @@
   reuse, managed detach and ownership revalidation, save/reload and 300 ms
   cart-edit rescans, `:Pico8Refresh`, setup re-entry that keeps managed
   attachments, and focused correctness tests.
+- Complete M27: enable the cart budget code lens and inlay-hint display,
+  add `codelens`/`inlay_hints` setup options, and add
+  `:Pico8ToggleInlayHints` with Neovim 0.11/0.12 coverage.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.

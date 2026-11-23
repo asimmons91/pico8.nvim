@@ -62,6 +62,14 @@ local function features()
   return require("pico_lsp.client")
 end
 
+local function attach_features(bufnr)
+  local client = clients(bufnr)[1]
+  if not client then
+    fail("no pico_lsp client attached for the feature attach")
+  end
+  features().attach(client, bufnr)
+end
+
 -- Neovim 0.11 takes a bufnr for codelens.get; 0.12 takes a filter table.
 local function lenses(bufnr)
   if is_012 then
@@ -157,6 +165,12 @@ end
 
 -- Base-config users who never call setup still get the display -----------------
 
+local wildcard_attached = {}
+vim.lsp.config("*", {
+  on_attach = function(_, bufnr)
+    wildcard_attached[bufnr] = true
+  end,
+})
 vim.lsp.config("pico_lsp", {
   cmd = { binary },
   settings = { pico8 = { inlayHints = true } },
@@ -175,6 +189,9 @@ local base_client = clients(base_buf)[1]
 if type(base_client.config.on_attach) ~= "function" then
   fail("the shipped config has no on_attach hook")
 end
+if not wildcard_attached[base_buf] then
+  fail("the wildcard vim.lsp.config('*') on_attach did not run")
+end
 
 if is_012 then
   wait_for(function()
@@ -189,6 +206,9 @@ end
 if not vim.lsp.inlay_hint.is_enabled({ bufnr = base_buf }) then
   fail("inlay hints were not enabled by the shipped config")
 end
+wait_for(function()
+  return #vim.lsp.inlay_hint.get({ bufnr = base_buf }) > 0
+end, "inlay hints did not appear after the base-config attach")
 
 -- Direct server responses are independent of the client display state.
 local lens_result = request(base_buf, "textDocument/codeLens", document_params(base_buf))
@@ -235,6 +255,9 @@ end
 if not vim.lsp.inlay_hint.is_enabled({ bufnr = default_buf }) then
   fail("helper defaults did not enable inlay hints")
 end
+wait_for(function()
+  return #vim.lsp.inlay_hint.get({ bufnr = default_buf }) > 0
+end, "inlay hints did not appear after the helper-default attach")
 
 local notifications = toggle()
 if #notifications > 0 then
@@ -254,6 +277,41 @@ end
 -- Setup options suppress the client-side display ---------------------------------
 
 require("pico_lsp").setup({ codelens = false, inlay_hints = false })
+
+-- A buffer that was enabled before the option change must honor the option on
+-- the next attach. Neovim 0.12 keeps a per-buffer capability marker; Neovim
+-- 0.11 keeps a buffer-local save-refresh autocmd.
+features().attach(default_buf)
+if is_012 then
+  if vim.lsp.codelens.is_enabled({ bufnr = default_buf }) then
+    fail("the next attach did not clear a stale code-lens marker")
+  end
+  if #vim.lsp.codelens.get({ bufnr = default_buf }) > 0 then
+    fail("the next attach kept cached code lenses")
+  end
+else
+  if vim.b[default_buf].pico8_codelens_save_refresh ~= nil then
+    fail("the next attach left the 0.11 save-refresh hook registered")
+  end
+  local original_refresh = vim.lsp.codelens.refresh
+  local refresh_calls = 0
+  vim.lsp.codelens.refresh = function(...)
+    refresh_calls = refresh_calls + 1
+    return original_refresh(...)
+  end
+  edit(default_cart)
+  vim.cmd("silent write")
+  vim.wait(300, function()
+    return refresh_calls > 0
+  end, 25)
+  vim.lsp.codelens.refresh = original_refresh
+  if refresh_calls ~= 0 then
+    fail("a stale save-refresh hook requested the lens with codelens = false")
+  end
+end
+if vim.lsp.inlay_hint.is_enabled({ bufnr = default_buf }) then
+  fail("the next attach did not disable stale inlay hints")
+end
 
 local project_off = tmp .. "/options-off"
 local off_cart = project_off .. "/cart.p8"
@@ -285,7 +343,57 @@ if type(lens_result) ~= "table" or #lens_result == 0 then
   fail("the server stopped returning lenses when the client display was off")
 end
 
+-- Each setup option is independent.
+require("pico_lsp").setup({ codelens = false })
+
+local project_lens_off = tmp .. "/lens-off"
+local lens_off_cart = project_lens_off .. "/cart.p8"
+write(lens_off_cart, cart_lines())
+local lens_off_buf = edit(lens_off_cart)
+wait_for(function()
+  return #clients(lens_off_buf) > 0
+end, "pico-lsp did not attach with codelens disabled")
+if is_012 then
+  if vim.lsp.codelens.is_enabled({ bufnr = lens_off_buf }) then
+    fail("codelens = false did not disable the lens")
+  end
+else
+  if vim.wait(500, function()
+    return lens_visible(lens_off_buf)
+  end, 25) then
+    fail("codelens = false still refreshed the lens")
+  end
+end
+if not vim.lsp.inlay_hint.is_enabled({ bufnr = lens_off_buf }) then
+  fail("codelens = false also disabled inlay hints")
+end
+
+require("pico_lsp").setup({ inlay_hints = false })
+
+local project_hints_off = tmp .. "/hints-off"
+local hints_off_cart = project_hints_off .. "/cart.p8"
+write(hints_off_cart, cart_lines())
+local hints_off_buf = edit(hints_off_cart)
+wait_for(function()
+  return #clients(hints_off_buf) > 0
+end, "pico-lsp did not attach with inlay_hints disabled")
+if vim.lsp.inlay_hint.is_enabled({ bufnr = hints_off_buf }) then
+  fail("inlay_hints = false did not disable hints")
+end
+if is_012 then
+  wait_for(function()
+    return vim.lsp.codelens.is_enabled({ bufnr = hints_off_buf })
+  end, "inlay_hints = false also disabled code lens")
+else
+  wait_for_lens(hints_off_buf, "inlay_hints = false also disabled code lens")
+end
+
 require("pico_lsp").setup()
+-- Restore the display on the earlier default buffer for the toggle test below.
+attach_features(default_buf)
+if not vim.lsp.inlay_hint.is_enabled({ bufnr = default_buf }) then
+  fail("restoring setup did not re-enable hints on the earlier buffer")
+end
 
 -- Included .lua buffers are not pico8 buffers ----------------------------------
 
@@ -312,6 +420,9 @@ end, "the helper did not attach the included .lua buffer")
 
 if vim.lsp.inlay_hint.is_enabled({ bufnr = include_lib_buf }) then
   fail("inlay hints were enabled for a non-pico8 buffer")
+end
+if not wildcard_attached[include_lib_buf] then
+  fail("the wildcard on_attach did not run for an included .lua buffer")
 end
 if features().codelens_enabled(include_lib_buf) then
   fail("code lens was enabled for a non-pico8 buffer")
@@ -360,6 +471,26 @@ toggle()
 if vim.lsp.inlay_hint.is_enabled({ bufnr = default_buf }) then
   fail("the toggle did not work with the helper disabled")
 end
+
+-- A fresh cart still gets the shipped config's display while the helper is
+-- disabled; the helper flag is not a display switch.
+local project_disabled = tmp .. "/disabled-helper"
+local disabled_cart = project_disabled .. "/cart.p8"
+write(disabled_cart, cart_lines())
+local disabled_buf = edit(disabled_cart)
+wait_for(function()
+  return #clients(disabled_buf) > 0
+end, "pico-lsp did not attach with the helper disabled")
+if is_012 then
+  wait_for(function()
+    return vim.lsp.codelens.is_enabled({ bufnr = disabled_buf })
+  end, "the disabled helper suppressed code lens")
+else
+  wait_for_lens(disabled_buf, "the disabled helper suppressed code lens")
+end
+if not vim.lsp.inlay_hint.is_enabled({ bufnr = disabled_buf }) then
+  fail("the disabled helper suppressed inlay hints")
+end
 require("pico_lsp").setup()
 
 -- Neovim 0.11 refreshes the lens on save ---------------------------------------
@@ -375,6 +506,21 @@ if not is_012 then
     local after = lens_title(base_buf)
     return after ~= nil and after ~= before
   end, "the 0.11 code lens did not refresh after BufWritePost")
+
+  local function save_refresh_count(bufnr)
+    local count = 0
+    for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "BufWritePost", buffer = bufnr })) do
+      if autocmd.desc == "Refresh pico-lsp code lenses" then
+        count = count + 1
+      end
+    end
+    return count
+  end
+  attach_features(base_buf)
+  attach_features(base_buf)
+  if save_refresh_count(base_buf) ~= 1 then
+    fail("a repeated attach registered duplicate save-refresh hooks")
+  end
 end
 
 -- Explicit false and missing server settings both warn -------------------------
@@ -386,6 +532,21 @@ if not vim.wait(3000, function()
   return #vim.lsp.get_clients({ name = "pico_lsp" }) == 0
 end, 25) then
   fail("clients did not stop before the manual-setting cases")
+end
+
+-- The toggle has a clear no-client path.
+local idle_cart = tmp .. "/idle/cart.p8"
+write(idle_cart, cart_lines())
+local idle_buf = edit(idle_cart)
+notifications = toggle()
+if #notifications == 0 then
+  fail("the toggle without a client did not notify")
+end
+if not notifications[1].message:find("no pico_lsp client", 1, true) then
+  fail("the no-client toggle message is " .. notifications[1].message)
+end
+if vim.lsp.inlay_hint.is_enabled({ bufnr = idle_buf }) then
+  fail("the toggle changed hints without a client")
 end
 
 local function start_with_settings(name, settings)

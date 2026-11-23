@@ -60,12 +60,25 @@ end
 
 -- Neovim 0.11 has no codelens enable state, so refresh again after a cart save.
 -- The budget lens is allowed to be one save behind while typing.
+local function remove_save_refresh(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  local id = vim.b[bufnr].pico8_codelens_save_refresh
+  if type(id) == "number" then
+    pcall(vim.api.nvim_del_autocmd, id)
+  end
+  vim.b[bufnr].pico8_codelens_save_refresh = nil
+end
+
 local function ensure_save_refresh(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
   if vim.b[bufnr].pico8_codelens_save_refresh then
     return
   end
-  vim.b[bufnr].pico8_codelens_save_refresh = true
-  local ok = pcall(vim.api.nvim_create_autocmd, "BufWritePost", {
+  local ok, id = pcall(vim.api.nvim_create_autocmd, "BufWritePost", {
     buffer = bufnr,
     desc = "Refresh pico-lsp code lenses",
     callback = function(args)
@@ -81,8 +94,8 @@ local function ensure_save_refresh(bufnr)
       end
     end,
   })
-  if not ok then
-    vim.b[bufnr].pico8_codelens_save_refresh = nil
+  if ok and type(id) == "number" then
+    vim.b[bufnr].pico8_codelens_save_refresh = id
   end
 end
 
@@ -107,6 +120,23 @@ function M.enable_codelens(bufnr)
   end
   log_debug("pico-lsp: this Neovim build has no code lens API")
   return false
+end
+
+-- Neovim 0.12 stores a per-buffer "codelens enabled" marker that survives a
+-- client restart. Clear it when the option is off so a restart honors the new
+-- settings. Neovim 0.11 has no enable state; its LspDetach handler clears the
+-- cached lenses, so removing the save hook is enough there.
+function M.disable_codelens(bufnr)
+  bufnr = resolve_bufnr(bufnr)
+  remove_save_refresh(bufnr)
+  if M.codelens_mode() ~= "enable" then
+    return false
+  end
+  local ok, err = pcall(vim.lsp.codelens.enable, false, { bufnr = bufnr })
+  if not ok then
+    log_debug("pico-lsp: could not disable code lens: " .. tostring(err))
+  end
+  return ok
 end
 
 -- Report the per-buffer display state the same way on both Neovim versions.
@@ -142,6 +172,19 @@ function M.enable_inlay_hints(bufnr)
   return ok
 end
 
+function M.disable_inlay_hints(bufnr)
+  bufnr = resolve_bufnr(bufnr)
+  local inlay_hint = vim.lsp and vim.lsp.inlay_hint
+  if type(inlay_hint) ~= "table" or type(inlay_hint.enable) ~= "function" then
+    return false
+  end
+  local ok, err = pcall(inlay_hint.enable, false, { bufnr = bufnr })
+  if not ok then
+    log_debug("pico-lsp: could not disable inlay hints: " .. tostring(err))
+  end
+  return ok
+end
+
 function M.inlay_hints_enabled(bufnr)
   bufnr = resolve_bufnr(bufnr)
   local inlay_hint = vim.lsp and vim.lsp.inlay_hint
@@ -150,6 +193,87 @@ function M.inlay_hints_enabled(bufnr)
   end
   local ok, enabled = pcall(inlay_hint.is_enabled, { bufnr = bufnr })
   return ok and enabled == true
+end
+
+-- The first inlay request can race the server's didOpen analysis and return an
+-- empty result, leaving the display blank until the first edit. Refresh a
+-- couple of times after attach, stopping as soon as hints are visible.
+local ATTACH_HINT_RETRIES = 2
+local ATTACH_HINT_RETRY_MS = 100
+
+local function current_options()
+  local ok, client = pcall(require, "pico_lsp.client")
+  if ok and client and client.options then
+    return client.options
+  end
+  return M.options
+end
+
+local function has_inlay_hints(bufnr)
+  local inlay_hint = vim.lsp and vim.lsp.inlay_hint
+  if type(inlay_hint) ~= "table" or type(inlay_hint.get) ~= "function" then
+    return false
+  end
+  local ok, hints = pcall(inlay_hint.get, { bufnr = bufnr })
+  return ok and type(hints) == "table" and #hints > 0
+end
+
+local function refresh_inlay_hints_after_attach(bufnr)
+  local function attempt(index)
+    if current_options().inlay_hints == false then
+      return
+    end
+    if not is_pico8_buffer(bufnr) or not M.inlay_hints_enabled(bufnr) then
+      return
+    end
+    if #vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr }) == 0 then
+      return
+    end
+    if has_inlay_hints(bufnr) then
+      return
+    end
+    M.enable_inlay_hints(bufnr)
+    if index < ATTACH_HINT_RETRIES then
+      vim.defer_fn(function()
+        attempt(index + 1)
+      end, ATTACH_HINT_RETRY_MS)
+    end
+  end
+
+  vim.defer_fn(function()
+    attempt(1)
+  end, ATTACH_HINT_RETRY_MS)
+end
+
+local function run_on_attach(callback, client, bufnr)
+  if type(callback) == "function" then
+    local ok, err = pcall(callback, client, bufnr)
+    if not ok then
+      log_debug("pico-lsp: wildcard on_attach failed: " .. tostring(err))
+    end
+    return
+  end
+  if type(callback) ~= "table" then
+    return
+  end
+  for _, entry in ipairs(callback) do
+    if type(entry) == "function" then
+      local ok, err = pcall(entry, client, bufnr)
+      if not ok then
+        log_debug("pico-lsp: wildcard on_attach failed: " .. tostring(err))
+      end
+    end
+  end
+end
+
+local function run_wildcard_on_attach(client, bufnr)
+  local ok, wildcard = pcall(function()
+    return vim.lsp.config["*"]
+  end)
+  if not ok or type(wildcard) ~= "table" then
+    return
+  end
+  run_on_attach(wildcard.on_attach, client, bufnr)
 end
 
 -- Read the client-visible `pico8.inlayHints` value. Returns true, false, or
@@ -228,18 +352,27 @@ function M.toggle_inlay_hints(bufnr)
 end
 
 -- Called from the shipped config's `on_attach` and from the helper's fallback
--- config. Only `pico8` buffers get the client-side display.
-function M.attach(bufnr)
+-- config. Only `pico8` buffers get the client-side display. The wildcard
+-- `vim.lsp.config("*")` on_attach runs afterwards: a specific config replaces
+-- the wildcard value in Neovim, so call it explicitly to preserve the usual
+-- wildcard behavior. Running it last also lets a user override our display
+-- choices in their callback.
+function M.attach(client, bufnr)
   bufnr = resolve_bufnr(bufnr)
-  if not is_pico8_buffer(bufnr) then
-    return
+  if is_pico8_buffer(bufnr) then
+    if M.options.codelens == false then
+      M.disable_codelens(bufnr)
+    else
+      M.enable_codelens(bufnr)
+    end
+    if M.options.inlay_hints == false then
+      M.disable_inlay_hints(bufnr)
+    else
+      M.enable_inlay_hints(bufnr)
+      refresh_inlay_hints_after_attach(bufnr)
+    end
   end
-  if M.options.codelens ~= false then
-    M.enable_codelens(bufnr)
-  end
-  if M.options.inlay_hints ~= false then
-    M.enable_inlay_hints(bufnr)
-  end
+  run_wildcard_on_attach(client, bufnr)
 end
 
 function M.setup(opts)

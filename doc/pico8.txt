@@ -32,11 +32,14 @@ Options:
     `settings`      pico8 server settings table
 
 The shipped config enables the client-side display for the cart budget lens
-and inlay hints on `pico8` buffers. The server settings `pico8.limits.codeLens`
-and `pico8.inlayHints` decide what is returned; `inlayHints` defaults to false.
-Client-side options apply to clients started afterwards, so restart an existing
-client after changing them. `:Pico8ToggleInlayHints` toggles the display for a
-buffer and warns when the server setting is false or absent.
+and inlay hints on `pico8` buffers. The server's `pico8.limits.codeLens` and
+`pico8.inlayHints` settings decide what is returned; hints also require type
+checking to be enabled. See the pico-lsp configuration reference for defaults.
+Client-side options apply to clients started afterwards. Restart the client
+after changing them (`:lsp restart` on Neovim 0.12+; on 0.11 run
+`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")`).
+`:Pico8ToggleInlayHints` toggles the display for a buffer and warns when the
+server setting is false or absent.
 
 The server owns setting defaults; the plugin does not duplicate them. The
 command falls back from `g:pico_lsp_cmd` to `$PICO_LSP_BIN` to `pico-lsp`.

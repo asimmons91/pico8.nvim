@@ -138,7 +138,10 @@ M27's implementation choices were confirmed on 2026-11-23: the inlay toggle
 warns when `pico8.inlayHints` is false **or unset** because the server default is
 false, and `:Pico8ToggleInlayHints` is registered even when the helper is
 disabled because it only controls client-side display. Display enablement is
-limited to `pico8` buffers; included `.lua` files are untouched.
+limited to `pico8` buffers; included `.lua` files are untouched. Re-attach
+reconciles stale display state with the current options, a bounded post-attach
+hint refresh handles the server `didOpen` race, and the shipped `on_attach`
+preserves a wildcard `vim.lsp.config("*")` callback.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

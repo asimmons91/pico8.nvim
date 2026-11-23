@@ -215,13 +215,18 @@ enables its client-side display, so it appears without extra setup. The lens
 marks compressed budgets with `(warning)` from 90% of the limit and
 `(over limit)` above it.
 
-Inferred local type hints appear when the server setting is on:
+Inferred local type hints appear when the server setting is on and type
+checking is not `off`:
 
 ```lua
 require("pico_lsp").setup({
   settings = { pico8 = { inlayHints = true } },
 })
 ```
+
+See the
+[pico-lsp configuration reference](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md)
+for server defaults.
 
 The client display is enabled by default. Turn either display off for clients
 started afterwards:
@@ -233,12 +238,21 @@ require("pico_lsp").setup({
 })
 ```
 
-`:LspRestart` after changing setup options. `:Pico8ToggleInlayHints` toggles the
-display for the current buffer without changing server settings; it warns when
-`pico8.inlayHints` is false or unset. If you replace the shipped `on_attach`,
-call `vim.lsp.codelens.enable(true, { bufnr = bufnr })` on Neovim 0.12+ (or
-`vim.lsp.codelens.refresh({ bufnr = bufnr })` on 0.11) and
-`vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })` yourself.
+`:lsp restart` after changing setup options on Neovim 0.12+; on 0.11 use
+`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")`.
+`:Pico8ToggleInlayHints` toggles the display for the current buffer without
+changing server settings; it warns when `pico8.inlayHints` is false or unset.
+
+If you replace the shipped `on_attach`, enable the display yourself:
+
+```lua
+-- Neovim 0.12+
+vim.lsp.codelens.enable(true, { bufnr = bufnr })
+-- Neovim 0.11
+vim.lsp.codelens.refresh({ bufnr = bufnr })
+
+vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+```
 
 A cached statusline API, `:Pico8CartInfo`, and `:Pico8Tabs` are proposed in
 M28. The current request is:

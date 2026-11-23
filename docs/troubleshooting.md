@@ -56,13 +56,17 @@ above.
   `:lua =vim.lsp.codelens.is_enabled({ bufnr = 0 })` and
   `:lua =vim.lsp.inlay_hint.is_enabled({ bufnr = 0 })`. On Neovim 0.11, use
   `:lua =vim.lsp.codelens.get(0)` and the same inlay-hint call.
-- For hints, `pico8.inlayHints` defaults to `false` on the server. Set it to
-  `true` in `settings`. `:Pico8ToggleInlayHints` warns when the setting is false
-  or absent; it does not change server configuration.
+- For hints, enable `pico8.inlayHints` in `settings` and keep `typeChecking`
+  other than `off`. The server default is off; see
+  [configuration](configuration.md#code-lens-and-inlay-hints).
+- `:Pico8ToggleInlayHints` toggles the client display for the current buffer.
+  It warns when the setting is false or absent and does not change server
+  configuration.
 - The budget lens also requires `pico8.limits.codeLens = true` and a root cart
   with available counts.
-- Client-side options apply to clients started after `setup`. Restart an
-  existing client with `:LspRestart`.
+- Client-side options apply to clients started after `setup`. Restart the
+  client with `:lsp restart` on Neovim 0.12+, or with
+  `:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")` on 0.11.
 - Inspect the client log if the requests fail.
 
 ## PNG cart fails

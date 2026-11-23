@@ -134,9 +134,11 @@ The shipped config enables client-side display for the cart budget code lens
 and inferred-type inlay hints on `pico8` buffers. The server settings remain the
 feature switches:
 
-- `pico8.limits.codeLens` (default `true`) returns the budget lens.
-- `pico8.inlayHints` (default `false`) returns local type hints. Set it to
-  `true` in `settings` to see hints.
+- `pico8.limits.codeLens` returns the budget lens.
+- `pico8.inlayHints` returns local type hints when enabled and `typeChecking`
+  is not `off`. It defaults to `false`, so set it to `true` in `settings` to see
+  hints. The authoritative defaults and full settings table are in the
+  [pico-lsp configuration reference](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
 
 Turn the client-side display off for clients started afterwards:
 
@@ -144,7 +146,9 @@ Turn the client-side display off for clients started afterwards:
 require("pico_lsp").setup({ codelens = false, inlay_hints = false })
 ```
 
-Restart an existing client (`:LspRestart`) for setup changes to take effect.
+Restart the client for setup changes to take effect: `:lsp restart` on Neovim
+0.12+, or
+`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")` on 0.11.
 `:Pico8ToggleInlayHints` flips the display for the current buffer and warns when
 `pico8.inlayHints` is false or unset.
 

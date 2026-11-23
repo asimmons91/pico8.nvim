@@ -77,6 +77,24 @@ if type(cart_client.config.cmd) ~= "table" or cart_client.config.cmd[1] ~= binar
   fail("fallback command did not use PICO_LSP_BIN")
 end
 
+-- The fallback config uses the same on_attach display as the shipped config.
+if vim.fn.has("nvim-0.12") == 1 then
+  if not vim.wait(5000, function()
+    return vim.lsp.codelens.is_enabled({ bufnr = 0 })
+  end, 50) then
+    fail("fallback config did not enable code lens")
+  end
+else
+  if not vim.wait(5000, function()
+    return #vim.lsp.codelens.get(0) > 0
+  end, 50) then
+    fail("fallback config did not refresh the code lens")
+  end
+end
+if not vim.lsp.inlay_hint.is_enabled({ bufnr = 0 }) then
+  fail("fallback config did not enable inlay hints")
+end
+
 vim.cmd.edit(vim.fn.fnameescape(included))
 if not vim.wait(10000, function()
   return #vim.lsp.get_clients({ name = "pico_lsp", bufnr = 0 }) > 0

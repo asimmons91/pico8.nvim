@@ -311,10 +311,10 @@ local function is_virtual(bufnr, name)
   return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
-local function enable_client_features(bufnr)
+local function enable_client_features(lsp_client, bufnr)
   local ok, client = pcall(require, "pico_lsp.client")
   if ok and client and type(client.attach) == "function" then
-    pcall(client.attach, bufnr)
+    pcall(client.attach, lsp_client, bufnr)
   end
 end
 
@@ -332,8 +332,8 @@ local function fallback_config()
       end
       on_dir(vim.fs.dirname(vim.fs.normalize(name)))
     end,
-    on_attach = function(_, bufnr)
-      enable_client_features(bufnr)
+    on_attach = function(lsp_client, bufnr)
+      enable_client_features(lsp_client, bufnr)
     end,
   }
 end

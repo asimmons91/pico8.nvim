@@ -32,10 +32,10 @@ end
 
 -- Enable the client-side display for the cart budget lens and inferred-type
 -- inlay hints. The server settings remain the feature switches.
-local function on_attach(_, bufnr)
+local function on_attach(lsp_client, bufnr)
   local ok, client = pcall(require, "pico_lsp.client")
   if ok and client and type(client.attach) == "function" then
-    pcall(client.attach, bufnr)
+    pcall(client.attach, lsp_client, bufnr)
   end
 end
 
