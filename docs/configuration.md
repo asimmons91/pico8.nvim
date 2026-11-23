@@ -26,8 +26,42 @@ require("pico_lsp").setup({
 normalized to a one-element list because Neovim's LSP client rejects a bare
 string.
 
+Command resolution:
+
+- The shipped `lsp/pico_lsp.lua` checks `vim.g.pico_lsp_cmd`, then
+  `PICO_LSP_BIN`, then `pico-lsp` on `PATH`.
+- `cmd` in `require("pico_lsp").setup()` and a user
+  `vim.lsp.config("pico_lsp", { cmd = ... })` call override the shipped value;
+  whichever runs last wins.
+- A table `cmd` is preserved. A string is normalized to a one-element list
+  because Neovim's LSP client rejects a bare string.
+
 `cmd` and `settings` are merged into `vim.lsp.config("pico_lsp", ...)` when
-`lsp` is enabled. A later user `vim.lsp.config` call still wins.
+`lsp` is enabled. The shipped `lsp/pico_lsp.lua` contains no `settings` table;
+`pico-lsp` owns the defaults. The helper reads the same merged config and merges
+its own `settings` overrides on top.
+
+### Workspace root
+
+The shipped config uses the cart directory as `root_dir`. There is no default
+`.git` walk, so a cart outside a repository still gets a workspace root. Carts
+in sibling directories start separate clients.
+
+Override the root before opening carts if you want repository-wide symbols:
+
+```lua
+vim.lsp.config("pico_lsp", {
+  root_dir = function(bufnr, on_dir)
+    local git = vim.fs.root(bufnr, { ".git" })
+    if git then
+      on_dir(git)
+    end
+  end,
+})
+```
+
+The override replaces the shipped callback; it is not merged. An existing
+client keeps its root until it restarts.
 
 ### Disable the helper
 
@@ -47,8 +81,10 @@ without it; included `.lua` attachment is the helper's job.
 ## Server settings
 
 The server reads the `pico8` section through `workspace/configuration`,
-`initializationOptions.pico8`, and `workspace/didChangeConfiguration`. The
-authoritative reference is the
+`initializationOptions.pico8`, and `workspace/didChangeConfiguration`. When the
+client supports `workspace/configuration`, `pico-lsp` pulls the `pico8` section
+after initialization. Server defaults remain authoritative; the plugin ships no
+duplicate settings table. The authoritative reference is the
 [pico-lsp configuration docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
 
 Common settings:
@@ -72,9 +108,10 @@ vim.g.pico8_glyph_maps = 1
 Set before opening a cart. The maps are opt-in because they replace uppercase
 letters in Lua code. See [usage](usage.md#pico-8-shift-shortcuts).
 
-## Native config override
+## Standalone native config
 
-If you prefer not to use the plugin's `lsp` activation:
+If you prefer not to use the plugin's `lsp` activation, this complete starting
+point does not depend on the shipped defaults:
 
 ```lua
 require("pico_lsp").setup({ lsp = false })

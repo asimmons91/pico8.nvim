@@ -6,12 +6,10 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** Skeleton extraction. The existing helper, ftplugin, syntax,
-ftdetect, PNG support, glyph input, and tests are in place. The M25 client
-skeleton (native config, cart-aware roots, and setup activation) is present; the
-remaining M25 work and M26–M32/M34 are proposed and unimplemented. M33 (range
-formatting, document links, and code-lens refresh) remains server work in
-`pico-lsp`.
+**Status:** M25 is complete. The plugin ships native LSP configuration,
+cart-aware roots, one-call activation, and the cart-owned `.lua` helper.
+M26–M32 and M34 are proposed; M33 (range formatting, document links, and
+code-lens refresh) remains server work in `pico-lsp`.
 
 ## Requirements
 
@@ -62,6 +60,35 @@ vim.opt.runtimepath:append("/path/to/pico8.nvim")
 require("pico_lsp").setup()
 ```
 
+Only `lsp/pico_lsp.lua` is required for base LSP setup. The plugin also ships
+`ftdetect`, `ftplugin`, `syntax`, the cart-owned `.lua` helper, and commands;
+those runtime files add editor behavior beyond starting the client.
+
+### Workspace root
+
+The shipped config uses the directory containing the cart as `root_dir`. A cart
+in a plain directory with no `.git` still has a workspace root, `#include`
+paths resolve from that directory, and workspace symbols scan the cart's
+directory rather than an unrelated repository root. Carts in different
+directories start separate clients.
+
+To use a repository-wide root instead, override `root_dir` before opening a
+cart:
+
+```lua
+vim.lsp.config("pico_lsp", {
+  root_dir = function(bufnr, on_dir)
+    local git = vim.fs.root(bufnr, { ".git" })
+    if git then
+      on_dir(git)
+    end
+  end,
+})
+```
+
+There is no default `.git` fallback. A user override replaces the shipped
+callback; the two roots are not merged.
+
 ### Server binary
 
 Install `pico-lsp` from a [GitHub release](https://github.com/asimmons91/pico-lsp/releases)
@@ -71,13 +98,14 @@ or with:
 go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@latest
 ```
 
-Verify it with `pico-lsp --version`. A Mason package is planned but not part of
-the skeleton.
+Verify it with `pico-lsp --version`. A Mason package is planned.
 
 ## What works now
 
-- `pico-lsp` attaches to `.p8` carts through the native `lsp/pico_lsp.lua`
-  config.
+- `pico-lsp` attaches to `.p8` carts through the shipped `lsp/pico_lsp.lua`
+  config after `require("pico_lsp").setup()` (or `opts = {}` with lazy.nvim).
+- Carts in plain, non-git directories use the cart directory as the client
+  root; carts in different directories get separate roots.
 - Cart-owned `.lua` files attach through the helper. Buffer-aware unsaved
   `#include` discovery is proposed in M26.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
@@ -103,7 +131,7 @@ the skeleton.
 ```lua
 require("pico_lsp").setup({
   cmd = { "pico-lsp" },       -- optional command override
-  lsp = true,                 -- enable the native client on setup
+  lsp = true,                 -- enable the pico_lsp client on setup
   disable = false,            -- disable the helper and LSP setup
   settings = {                -- optional pico8 server settings
     pico8 = { typeChecking = "basic" },
@@ -111,8 +139,15 @@ require("pico_lsp").setup({
 })
 ```
 
-`vim.g.pico_lsp_cmd` and `PICO_LSP_BIN` are also accepted. The server settings
-reference is in the [pico-lsp configuration docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
+The shipped config does not repeat server defaults. `settings` is merged into
+`vim.lsp.config("pico_lsp", ...)` and the helper reads the same merged config.
+
+Command resolution checks `vim.g.pico_lsp_cmd`, then `PICO_LSP_BIN`, then
+`pico-lsp` on `PATH`; `setup({ cmd = ... })` and a later
+`vim.lsp.config("pico_lsp", { cmd = ... })` override the shipped value. A string
+is normalized to a one-element list. See
+[configuration](docs/configuration.md) for root overrides and the server
+settings reference.
 
 ## Documentation
 
@@ -127,13 +162,14 @@ reference is in the [pico-lsp configuration docs](https://github.com/asimmons91/
 ## Development
 
 ```sh
-# Run the headless helper tests against an installed server.
+# Run the headless config and helper tests against an installed server.
 PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 ```
 
-The tests create temporary carts and exercise attachment, PNG opening, glyph
-insertion, and fallback behavior. The CI workflow checks out the server and
-builds a test binary.
+The tests create temporary carts and exercise config resolution, command-line
+overrides, cart and include roots, attachment, PNG opening, glyph insertion, and
+fallback behavior. The CI workflow checks out the server and builds a test
+binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

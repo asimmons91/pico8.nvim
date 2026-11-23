@@ -22,7 +22,9 @@ pico-lsp --version
 ```
 
 The plugin looks for `pico-lsp` on `PATH`. To use another binary, set `cmd` in
-the plugin setup, `vim.g.pico_lsp_cmd`, or `PICO_LSP_BIN`.
+the plugin setup, `vim.g.pico_lsp_cmd`, or `PICO_LSP_BIN`. The shipped config
+checks `vim.g.pico_lsp_cmd`, then `PICO_LSP_BIN`, then `pico-lsp`; a `setup`
+`cmd` or a later user `vim.lsp.config` call overrides that value.
 
 ## Install the plugin
 
@@ -68,6 +70,45 @@ directory as the workspace root.
   opts = {},
 }
 ```
+
+### Base LSP setup
+
+Only `lsp/pico_lsp.lua` is required for base LSP setup. Neovim 0.11+ loads it
+from `runtimepath`; `require("pico_lsp").setup()` enables it. The plugin also
+ships `ftdetect`, `ftplugin`, `syntax`, the cart-owned `.lua` helper, and
+commands, which add editor behavior beyond starting the client.
+
+`setup({ lsp = false })` skips `vim.lsp.enable("pico_lsp")` so you can call it
+yourself. The shipped config returns a plain table and has no side effects.
+
+### Workspace root
+
+A `.p8` buffer uses the cart's directory as its workspace root. This applies
+even when the directory has no `.git` marker. Includes resolve from the cart
+directory, and workspace symbols scan that directory. Two carts in different
+directories start separate clients; two carts in the same directory share one
+client.
+
+Unnamed buffers and `pico8-cart:` virtual buffers are not auto-activated by the
+shipped config. The `.p8.png` helper starts its virtual document explicitly with
+the source directory.
+
+To use a repository-wide root instead, override `root_dir` before opening the
+cart:
+
+```lua
+vim.lsp.config("pico_lsp", {
+  root_dir = function(bufnr, on_dir)
+    local git = vim.fs.root(bufnr, { ".git" })
+    if git then
+      on_dir(git)
+    end
+  end,
+})
+```
+
+The override replaces the shipped callback; it is not merged. Existing clients
+keep their root until they restart, so configure this before opening carts.
 
 ## Tree-sitter
 

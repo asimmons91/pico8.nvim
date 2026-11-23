@@ -11,14 +11,6 @@ local M = {}
 
 M.png_buffers = {}
 
-local default_settings = {
-  pico8 = {
-    apiVersion = "0.2.7",
-    typeChecking = "basic",
-    inlayHints = false,
-  },
-}
-
 local warned_missing_binary = false
 local warned_glyph_maps = false
 
@@ -114,7 +106,32 @@ local function normalize_cmd(cmd)
   return nil
 end
 
+local function valid_cmd(cmd)
+  if type(cmd) == "function" then
+    return cmd
+  end
+  return normalize_cmd(cmd)
+end
+
+-- Same precedence as lsp/pico_lsp.lua. Used only when the shipped config is
+-- absent, for example when the helper is loaded without `lsp/` on
+-- `runtimepath`.
+local function command()
+  local configured = vim.g.pico_lsp_cmd
+  if type(configured) == "string" and configured ~= "" then
+    return { configured }
+  end
+  if type(configured) == "table" and #configured > 0 and type(configured[1]) == "string" then
+    return configured
+  end
+  if vim.env.PICO_LSP_BIN and vim.env.PICO_LSP_BIN ~= "" then
+    return { vim.env.PICO_LSP_BIN }
+  end
+  return { "pico-lsp" }
+end
+
 local function resolved_config(opts)
+  opts = opts or {}
   local config
   local ok, value = pcall(function()
     return vim.lsp.config["pico_lsp"]
@@ -122,14 +139,14 @@ local function resolved_config(opts)
   if ok and type(value) == "table" then
     config = vim.deepcopy(value)
   else
-    config = {}
+    config = { filetypes = { "pico8" } }
   end
   config.name = "pico_lsp"
-  config.cmd = normalize_cmd(opts.cmd) or config.cmd or { "pico-lsp" }
-  config.settings = vim.tbl_deep_extend("force", default_settings, config.settings or {}, opts.settings or {})
+  config.cmd = valid_cmd(opts.cmd) or valid_cmd(config.cmd) or command()
+  local settings = vim.tbl_deep_extend("force", config.settings or {}, opts.settings or {})
+  config.settings = next(settings) ~= nil and settings or nil
   return config
 end
-
 
 local function ensure_client(root_dir, bufnr)
   local attached = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })
@@ -440,7 +457,7 @@ function M.setup(opts)
 
   if opts.lsp ~= false then
     local config = {}
-    local cmd = normalize_cmd(opts.cmd)
+    local cmd = valid_cmd(opts.cmd)
     if cmd then
       config.cmd = cmd
     end

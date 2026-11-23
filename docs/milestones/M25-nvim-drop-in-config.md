@@ -1,11 +1,11 @@
 # M25 — Neovim Drop-in Configuration and Cart-Aware Roots
 
-**Status:** Skeleton — initial `lsp/pico_lsp.lua` and `setup` activation landed;
-the remaining requirements are proposed.
+**Status:** Done — shipped config, cart-aware roots, setup activation, helper
+integration, tests, CI, and documentation are complete.
 
 **Depends on:** pico-lsp M6 (server features and editor integration)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -34,7 +34,7 @@ through the helper attaches the same client. Defining a user
 |---|---|---|
 | D1 | Config location | Ship `lsp/pico_lsp.lua`, loaded by Neovim 0.11+ from `runtimepath`, so `vim.lsp.config["pico_lsp"]` exists without user setup. |
 | D2 | Activation | `require("pico_lsp").setup()` calls `vim.lsp.enable("pico_lsp")` by default. Set `lsp = false` to manage activation manually. |
-| D3 | Root strategy | For `.p8` buffers, use the cart's directory as `root_dir`. Do not default to `.git`. This is the **recommended** choice and remains the main decision to confirm. |
+| D3 | Root strategy | For `.p8` buffers, use the cart's directory as `root_dir`. Do not default to `.git`. Confirmed 2026-11-23. |
 | D4 | Settings | Do not duplicate server defaults in the shipped config. An empty or absent `settings` table lets `internal/config` remain authoritative; documentation shows how to override individual fields. |
 | D5 | Command discovery | Resolve the executable from `vim.g.pico_lsp_cmd`, then `vim.env.PICO_LSP_BIN`, then `{ "pico-lsp" }`. Normalize string values to a one-element list because Neovim's LSP `cmd` must be a list or function. Local builds and headless tests can point at an absolute binary. |
 | D6 | Filetypes | The base config handles `pico8` only. Cart-owned `.lua` files remain the helper's job. |
@@ -43,16 +43,14 @@ through the helper attaches the same client. Defining a user
 | D9 | Editor floor | Neovim 0.11+ remains the supported floor. Use `vim.lsp.config`/`vim.lsp.enable`; no `nvim-lspconfig` dependency. |
 | D10 | Release | M25 is the foundation for M26–M32 and supplies the config/test job used by M34. It should land first and can ship independently in a patch. |
 
-### Open decision
+### Resolved decision
 
-**D3 needs confirmation.** Anchoring to the cart's directory gives predictable
-include and workspace-symbol scope for PICO-8 projects, but it means two carts
-in different subdirectories receive separate clients and workspace symbols are
-scoped to one cart directory. The alternative is the current `.git` root, which
-supports repository-wide symbol searches but is rootless outside git and can
-scan far more than the cart. A third option is the editor's workspace folder.
-The spec assumes the cart directory is the default and that users can override
-`root_dir` in their own `vim.lsp.config` call.
+**D3 confirmed:** anchoring to the cart's directory gives predictable include
+and workspace-symbol scope for PICO-8 projects. Two carts in different
+subdirectories receive separate clients and workspace symbols are scoped to one
+cart directory. Users who want repository-wide symbol searches can override
+`root_dir` in their own `vim.lsp.config` call, as documented in the install and
+configuration guides.
 
 ## Scope
 
@@ -235,16 +233,16 @@ Requirements:
 
 ## Exit criteria
 
-- [ ] Installing the plugin and calling `require("pico_lsp").setup()` attaches
+- [x] Installing the plugin and calling `require("pico_lsp").setup()` attaches
       to `.p8` carts without a copied config.
-- [ ] `setup({ lsp = false })` leaves client activation to the user.
-- [ ] A cart outside a git repository has a cart-directory workspace root.
-- [ ] Carts in different directories do not share a root by accident.
-- [ ] A user `vim.lsp.config` override wins over the shipped configuration.
-- [ ] The helper uses the merged config and no longer duplicates server
+- [x] `setup({ lsp = false })` leaves client activation to the user.
+- [x] A cart outside a git repository has a cart-directory workspace root.
+- [x] Carts in different directories do not share a root by accident.
+- [x] A user `vim.lsp.config` override wins over the shipped configuration.
+- [x] The helper uses the merged config and no longer duplicates server
       defaults.
-- [ ] Headless Neovim tests run in CI on the supported versions.
-- [ ] `README.md` and `docs/install.md` describe plugin and fallback installs.
+- [x] Headless Neovim tests run in CI on the supported versions.
+- [x] `README.md` and `docs/install.md` describe plugin and fallback installs.
 
 ## Risks
 

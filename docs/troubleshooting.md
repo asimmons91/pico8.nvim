@@ -28,8 +28,9 @@ above.
 
 - Confirm the include is a line beginning with `#include`.
 - Confirm the path resolves relative to the cart directory.
-- Confirm the cart has been saved since the include was added, or is open with
-  the current buffer contents.
+- Confirm the cart has been saved since the include was added. The helper reads
+  the cart from disk; buffer-aware discovery of unsaved edits is proposed in
+  M26.
 - Check that `lua_ls` and `pico_lsp` are not both attached to the same buffer.
 - The helper ignores unrelated `.lua` files by design.
 
