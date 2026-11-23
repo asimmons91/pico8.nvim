@@ -81,18 +81,6 @@ local function fire_text_changed(bufnr)
   vim.api.nvim_exec_autocmds("TextChanged", { buffer = bufnr })
 end
 
--- Wait for callbacks queued before this call (for example BufUnload's
--- scheduled rescan) to run without using a fixed sleep.
-local function drain_schedule()
-  local done = false
-  vim.schedule(function()
-    done = true
-  end)
-  wait_for(function()
-    return done
-  end, "scheduled callbacks did not run")
-end
-
 local function assert_root(client, directory, message)
   if root_of(client) ~= vim.fs.normalize(directory) then
     fail(message .. ": root is " .. root_of(client) .. " instead of " .. directory)
@@ -494,8 +482,10 @@ vim.api.nvim_del_augroup_by_id(yield_group)
 local project_w = tmp .. "/project-w"
 local cart_w = project_w .. "/cart.p8"
 local lib_w = project_w .. "/lib.lua"
+local lib2_w = project_w .. "/lib2.lua"
 write(cart_w, cart_lines("lib.lua"))
 write(lib_w, { "function lib_w() end" })
+write(lib2_w, { "function lib2_w() end" })
 
 local cart_w_buf = edit(cart_w)
 wait_for(function()
@@ -509,17 +499,28 @@ wait_for(function()
 end, "helper did not attach cart W's include")
 expected_client(lib_w_buf, client_w.id, "cart W's include did not use cart W's client")
 
--- Unload first while disk still includes the buffer. The unload rescan must
--- keep the attachment, so only BufWipeout can act on the later external change.
-vim.cmd("bunload! " .. cart_w_buf)
-drain_schedule()
-expected_client(lib_w_buf, client_w.id, "unloading a cart detached an include still on disk")
+-- lib2 is loaded but not included yet. The unload rescan will see an external
+-- cart change that adds it, proving the unload revalidation ran.
+local lib2_w_buf = edit(lib2_w)
+if #clients(lib2_w_buf) > 0 then
+  fail("the helper attached a buffer before it was included")
+end
 
+vim.cmd("bunload! " .. cart_w_buf)
+write(cart_w, cart_lines({ "lib.lua", "lib2.lua" }))
+wait_for(function()
+  return #initialized_clients(lib2_w_buf) > 0
+end, "unloading a cart did not revalidate its includes against disk")
+expected_client(lib_w_buf, client_w.id, "unload revalidation changed an existing include")
+expected_client(lib2_w_buf, client_w.id, "unload revalidation attached another client")
+
+-- The cart is now unloaded with no pending unload work. Remove both includes on
+-- disk and wipe the unloaded cart: only BufWipeout can detach them.
 write(cart_w, cart_lines(nil))
 vim.cmd("bwipeout! " .. cart_w_buf)
 wait_for(function()
-  return #clients(lib_w_buf) == 0
-end, "wiping an unloaded cart did not detach a removed include")
+  return #clients(lib_w_buf) == 0 and #clients(lib2_w_buf) == 0
+end, "wiping an unloaded cart did not detach removed includes")
 
 -- Reloading a cart picks up external include changes ---------------------------
 
@@ -647,6 +648,39 @@ wait_for(function()
 end, "the disk include cache missed a same-size include swap")
 expected_client(bb_g_buf, client_g.id, "same-size swap did not reuse the cart's client")
 
+-- A shared client does not make a user attachment helper-managed --------------
+
+local project_k = tmp .. "/project-k"
+local cart_k = project_k .. "/cart.p8"
+local owned_k = project_k .. "/owned.lua"
+local user_k = project_k .. "/user.lua"
+write(cart_k, cart_lines("owned.lua"))
+write(owned_k, { "function owned_k() end" })
+write(user_k, { "function user_k() end" })
+
+-- The user starts a pico_lsp client rooted at the cart directory on a buffer the
+-- cart does not include.
+local user_k_buf = edit(user_k)
+local user_k_config = vim.deepcopy(vim.lsp.config["pico_lsp"])
+user_k_config.root_dir = vim.fs.normalize(project_k)
+local shared_started = vim.lsp.start(user_k_config, { bufnr = user_k_buf })
+if not shared_started then
+  fail("could not start the shared-root user client")
+end
+wait_for(function()
+  return #initialized_clients(user_k_buf) == 1
+end, "the shared-root user client did not attach")
+local user_k_client_id = initialized_clients(user_k_buf)[1].id
+
+-- The helper reuses that client for an included buffer, marking only that
+-- buffer's attachment.
+local owned_k_buf = edit(owned_k)
+wait_for(function()
+  return #initialized_clients(owned_k_buf) > 0
+end, "helper did not attach the buffer sharing the user client")
+expected_client(owned_k_buf, user_k_client_id, "helper attached a different client")
+expected_client(user_k_buf, user_k_client_id, "helper disturbed the user attachment")
+
 -- Re-running setup preserves managed attachments -------------------------------
 
 local project_h = tmp .. "/project-h"
@@ -678,6 +712,16 @@ local reloaded = require("pico_lsp")
 reloaded.setup()
 expected_client(fresh_buf, user_client_id, "module reload detached a user-managed client")
 expected_client(lib_h_buf, client_h.id, "module reload lost a managed client")
+expected_client(user_k_buf, user_k_client_id, "module reload detached a user attachment sharing a helper client")
+expected_client(owned_k_buf, user_k_client_id, "module reload lost a helper attachment sharing a user client")
+
+-- Removing the shared client's include detaches only the helper-managed buffer.
+write(cart_k, cart_lines(nil))
+vim.cmd("Pico8Refresh")
+wait_for(function()
+  return #clients(owned_k_buf) == 0
+end, "removing the shared client's include did not detach its managed buffer")
+expected_client(user_k_buf, user_k_client_id, "removing an include detached a user attachment sharing a helper client")
 
 set_cart_includes(cart_h_buf, {})
 fire_text_changed(cart_h_buf)
@@ -728,6 +772,7 @@ for _, bufnr in ipairs({ lib_a_buf, lib_b_buf, save_a_buf, save_b_buf, lib_d_buf
   end
 end
 expected_client(fresh_buf, user_client_id, "disabling the helper removed a user-managed client")
+expected_client(user_k_buf, user_k_client_id, "disabling the helper removed a user attachment sharing a helper client")
 if not pcall(vim.cmd, "Pico8Refresh") then
   fail("Pico8Refresh errored when the helper was disabled")
 end

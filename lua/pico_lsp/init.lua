@@ -380,6 +380,13 @@ local function attached_client(bufnr, client_id)
   return clients[1]
 end
 
+local function forget_marker(bufnr, client_id)
+  local client = client_id and vim.lsp.get_client_by_id(client_id)
+  if client and client._pico8_helper_buffers then
+    client._pico8_helper_buffers[bufnr] = nil
+  end
+end
+
 local function wait_initialized(client)
   if client and not client.initialized then
     vim.wait(5000, function()
@@ -717,7 +724,10 @@ local function attach(bufnr)
     end
   end
 
-  client._pico8_helper = true
+  -- Mark this buffer's attachment only. A user-started attachment can share the
+  -- same client without becoming helper-managed.
+  client._pico8_helper_buffers = client._pico8_helper_buffers or {}
+  client._pico8_helper_buffers[bufnr] = true
   managed[bufnr] = {
     client_id = client.id,
     root_dir = root_dir,
@@ -735,7 +745,11 @@ end
 
 local function detach_managed(bufnr, record)
   managed[bufnr] = nil
-  if not record or not vim.api.nvim_buf_is_loaded(bufnr) then
+  if not record then
+    return
+  end
+  forget_marker(bufnr, record.client_id)
+  if not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
   if not attached_client(bufnr, record.client_id) then
@@ -753,6 +767,10 @@ local function revalidate_managed()
     if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
       pending[#pending + 1] = bufnr
     else
+      local record = managed[bufnr]
+      if record then
+        forget_marker(bufnr, record.client_id)
+      end
       managed[bufnr] = nil
     end
   end
@@ -777,6 +795,7 @@ local function revalidate_managed()
           safe_attach(bufnr)
         end
       elseif not attached_client(bufnr, record.client_id) then
+        forget_marker(bufnr, record.client_id)
         managed[bufnr] = nil
       end
     end
@@ -784,10 +803,11 @@ local function revalidate_managed()
 end
 
 -- A plugin/module reload creates a new module instance with an empty managed
--- map while Neovim keeps the clients. Re-adopt clients this helper started
--- (marked below) when their cart still owns the buffer, and detach marked
--- clients whose owner is gone or changed. User-started clients are unmarked, so
--- they remain untouched.
+-- map while Neovim keeps the clients. Re-adopt clients this helper started for
+-- this buffer (marked below) when their cart still owns the buffer, and detach
+-- marked clients whose owner is gone or changed. User-started attachments are
+-- unmarked, so they remain untouched even when they share a client with a
+-- helper-managed attachment.
 local function adopt_marked_clients()
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(bufnr) then
@@ -805,7 +825,7 @@ local function adopt_marked_clients()
           _uninitialized = true,
         })
         for _, client in ipairs(attached) do
-          if client._pico8_helper then
+          if client._pico8_helper_buffers and client._pico8_helper_buffers[bufnr] then
             if not adopted and cart and root_dir and root_matches(client, root_dir) then
               managed[bufnr] = {
                 client_id = client.id,
@@ -815,6 +835,7 @@ local function adopt_marked_clients()
               }
               adopted = true
             else
+              client._pico8_helper_buffers[bufnr] = nil
               local ok, err = pcall(vim.lsp.buf_detach_client, bufnr, client.id)
               if not ok then
                 log_debug("pico-lsp: could not detach orphaned helper client: " .. tostring(err))
@@ -1110,6 +1131,11 @@ function M.setup(opts)
       local bufnr = args.buf
       M.png_buffers[bufnr] = nil
       managed[bufnr] = nil
+      for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true })) do
+        if client._pico8_helper_buffers then
+          client._pico8_helper_buffers[bufnr] = nil
+        end
+      end
       local name = vim.api.nvim_buf_get_name(bufnr)
       local is_cart = name ~= "" and name:lower():match("%.p8$") ~= nil
       local is_lua = name ~= "" and name:lower():match("%.lua$") ~= nil
@@ -1140,6 +1166,9 @@ function M.setup(opts)
       local record = bufnr and managed[bufnr]
       if record and record.client_id == data.client_id then
         managed[bufnr] = nil
+      end
+      if bufnr then
+        forget_marker(bufnr, data.client_id)
       end
     end,
   })

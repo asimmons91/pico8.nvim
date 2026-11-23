@@ -211,9 +211,10 @@ the helper never attaches the first cart's client to the second cart's include.
 
 - `require("pico_lsp").setup(opts)` keeps its existing options.
 - New command: `:Pico8Refresh`.
-- Module-local cache and managed-attachment state; helper-started clients carry
-  a private marker so a module reload can re-adopt them; no new global
-  variables.
+- Module-local cache and managed-attachment state; helper-managed attachments
+  carry a private per-buffer marker on the client so a module reload can
+  re-adopt them without claiming a user-started attachment on another buffer;
+  no new global variables.
 - No new LSP request, response, server command, or setting.
 - `vim.b.pico8_cart` and comment settings are added by M29, not this milestone.
 
