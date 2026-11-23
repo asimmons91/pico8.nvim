@@ -130,6 +130,30 @@ local function command()
   return { "pico-lsp" }
 end
 
+local function is_virtual(bufnr, name)
+  if vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil then
+    return true
+  end
+  return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
+end
+
+-- Minimal config for helper-only installs without `lsp/pico_lsp.lua`. It also
+-- gives manual `vim.lsp.enable("pico_lsp")` a complete config instead of a
+-- partial one that would attach a rootless client.
+local function fallback_config()
+  return {
+    cmd = command(),
+    filetypes = { "pico8" },
+    root_dir = function(bufnr, on_dir)
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name == "" or is_virtual(bufnr, name) then
+        return
+      end
+      on_dir(vim.fs.dirname(vim.fs.normalize(name)))
+    end,
+  }
+end
+
 local function resolved_config()
   local config
   local ok, value = pcall(function()
@@ -138,7 +162,7 @@ local function resolved_config()
   if ok and type(value) == "table" then
     config = vim.deepcopy(value)
   else
-    config = { filetypes = { "pico8" } }
+    config = fallback_config()
   end
   config.name = "pico_lsp"
   config.cmd = valid_cmd(config.cmd) or command()
@@ -464,6 +488,12 @@ function M.setup(opts)
   end
   if type(opts.settings) == "table" then
     config.settings = opts.settings
+  end
+  local ok, existing = pcall(function()
+    return vim.lsp.config["pico_lsp"]
+  end)
+  if not (ok and type(existing) == "table") then
+    config = vim.tbl_deep_extend("force", fallback_config(), config)
   end
   if next(config) ~= nil then
     vim.lsp.config("pico_lsp", config)

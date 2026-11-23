@@ -124,13 +124,17 @@ vim.env.PICO_LSP_BIN = saved_env
 local project_a = tmp .. "/project-a"
 local project_b = tmp .. "/project-b"
 local project_c = tmp .. "/project-c"
+local project_d = tmp .. "/project-d"
 local cart_a = project_a .. "/cart.p8"
 local cart_b = project_b .. "/cart.p8"
 local cart_c = project_c .. "/cart.p8"
+local cart_d = project_d .. "/cart.p8"
 local lib_a = project_a .. "/lib.lua"
+local lib_d = project_d .. "/lib.lua"
 write_cart(cart_a, "lib.lua")
 write_cart(cart_b, "lib.lua")
 write_cart(cart_c, "lib.lua")
+write_cart(cart_d, "lib.lua")
 
 local function roots_for(bufnr)
   local seen = {}
@@ -159,10 +163,6 @@ vim.api.nvim_buf_delete(unnamed, { force = true })
 
 local virtual = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(virtual, "pico8-cart://cart.p8")
-if not vim.api.nvim_buf_get_name(virtual):match("^pico8%-cart:") then
-  -- Neovim 0.11 expands the URI; the helper marks the buffer instead.
-  vim.b[virtual].pico8_virtual_cart = true
-end
 if #roots_for(virtual) ~= 0 then
   fail("root_dir activated for a pico8-cart: virtual buffer")
 end
@@ -189,11 +189,19 @@ vim.api.nvim_buf_delete(misleading, { force = true })
 
 -- Activation opt-out ----------------------------------------------------------
 
-require("pico_lsp").setup({ lsp = false, cmd = binary })
+require("pico_lsp").setup({ lsp = false, cmd = { 42 } })
 config = get_config()
 if type(config.cmd) ~= "table" or config.cmd[1] ~= binary then
+  fail("malformed setup cmd did not fall back to PICO_LSP_BIN")
+end
+
+local custom_cmd = binary .. "-setup-override"
+require("pico_lsp").setup({ lsp = false, cmd = custom_cmd })
+config = get_config()
+if type(config.cmd) ~= "table" or config.cmd[1] ~= custom_cmd then
   fail("setup cmd was not applied when lsp is false")
 end
+vim.lsp.config("pico_lsp", { cmd = { binary } })
 if vim.lsp.is_enabled and vim.lsp.is_enabled("pico_lsp") then
   fail("setup({ lsp = false }) enabled the client")
 end
@@ -248,12 +256,42 @@ local lib_client = client_for(vim.api.nvim_get_current_buf())
 if lib_client.id ~= client_a.id then
   fail("helper attached included .lua to client " .. lib_client.id .. " instead of " .. client_a.id)
 end
-local helper_settings = lib_client.config.settings
-if helper_settings and helper_settings.pico8 then
-  for _, key in ipairs({ "apiVersion", "typeChecking", "inlayHints" }) do
-    if helper_settings.pico8[key] ~= nil then
-      fail("helper duplicated the server default for " .. key)
-    end
+
+-- A helper-started client reads command and settings from the merged config ----
+
+local wrapper = tmp .. "/pico-lsp-wrapper"
+vim.fn.writefile({
+  "#!/bin/sh",
+  'exec "' .. binary .. '" "$@"',
+}, wrapper)
+vim.fn.setfperm(wrapper, "rwxr-xr-x")
+vim.lsp.config("pico_lsp", {
+  cmd = { wrapper },
+  settings = {
+    pico8 = { typeChecking = "strict" },
+  },
+})
+
+vim.cmd.edit(vim.fn.fnameescape(lib_d))
+local lib_d_buf = vim.api.nvim_get_current_buf()
+wait_for(function()
+  local client = client_for(lib_d_buf)
+  return client ~= nil and client.id ~= client_a.id
+end, "helper did not start a client for the second project")
+
+local merged_client = client_for(lib_d_buf)
+if merged_client.config.cmd[1] ~= wrapper then
+  fail("helper ignored the merged cmd")
+end
+if not merged_client.config.settings
+  or not merged_client.config.settings.pico8
+  or merged_client.config.settings.pico8.typeChecking ~= "strict"
+then
+  fail("helper ignored the merged settings")
+end
+for _, key in ipairs({ "apiVersion", "inlayHints" }) do
+  if merged_client.config.settings.pico8[key] ~= nil then
+    fail("helper duplicated the server default for " .. key)
   end
 end
 

@@ -17,7 +17,7 @@ require("pico_lsp").setup({
 
 | Option | Type | Default | Meaning |
 |---|---|---|---|
-| `cmd` | string or string[] | `{ "pico-lsp" }` | Server executable used by the helper and the native client config. |
+| `cmd` | string, string[], or function | `{ "pico-lsp" }` | Server executable used by the helper and the native client config. |
 | `lsp` | boolean | `true` | Call `vim.lsp.enable("pico_lsp")` during setup. |
 | `disable` | boolean | `false` | Disable the helper and LSP setup. |
 | `settings` | table | unset | `pico8` settings passed to the client config. |

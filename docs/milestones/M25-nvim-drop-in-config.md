@@ -108,11 +108,14 @@ local function command()
   return { "pico-lsp" }
 end
 
--- Neovim 0.11 expands URI-like buffer names to absolute paths, so the helper
--- marks its virtual PNG buffers with `pico8_virtual_cart`. A scheme-prefixed
--- name covers Neovim 0.12 and buffers created without the marker.
+-- Neovim 0.11 expands URI-like buffer names to absolute paths, so a virtual
+-- `pico8-cart:` buffer may appear as `<cwd>/pico8-cart:...`. The helper marks
+-- its PNG buffers; the path-component fallback covers other virtual buffers.
 local function is_virtual(bufnr, name)
-  return vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil
+  if vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil then
+    return true
+  end
+  return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
 return {
@@ -149,9 +152,10 @@ Requirements:
   the base config. Return without calling `on_dir`; do not fabricate a root.
   Neovim skips activation when the callback is not called. Neovim 0.11 expands
   URI-like buffer names to absolute paths, so the helper marks `.p8.png`
-  virtual buffers with `b:pico8_virtual_cart` and the callback recognizes that
-  marker as well as a scheme-prefixed name. The helper starts `.p8.png` virtual
-  documents explicitly with the source directory.
+  virtual buffers with `b:pico8_virtual_cart`. The callback recognizes that
+  marker, a scheme-prefixed name, and an expanded `pico8-cart:` path component,
+  while still activating real paths such as `pico8-cart:demo`. The helper
+  starts `.p8.png` virtual documents explicitly with the source directory.
 - Do not call `on_dir(nil)` as a fallback for skipped buffers. The shipped
   config has no rootless activation path for unnamed or virtual buffers.
 - The helper continues to use the owning cart's directory as the root for
@@ -166,7 +170,10 @@ Requirements:
 - Remove the helper's `default_settings` duplication. The helper's `setup`
   options may still provide overrides, which merge over the resolved config.
 - The helper must tolerate `vim.lsp.config["pico_lsp"]` being absent and fall
-  back to a minimal table with the same command resolution.
+  back to a minimal table with the same command resolution. When setup applies
+  options without a shipped config, publish a complete fallback config with
+  `filetypes`, `root_dir`, and command resolution instead of a partial table,
+  so manual activation cannot attach a rootless client.
 - The README's manual `vim.lsp.config` example remains available for users who
   prefer not to use the plugin setup. That example may keep explicit settings
   because it is a standalone starting point.
@@ -209,7 +216,9 @@ Requirements:
   - a user override of `root_dir` wins;
   - the helper attaches an included `.lua` file to the same client;
   - the helper falls back to its own config and command resolution when
-    `lsp/pico_lsp.lua` is absent from `runtimepath`;
+    `lsp/pico_lsp.lua` is absent from `runtimepath`, and manual activation
+    attaches one rooted client without a rootless duplicate;
+  - a `.p8.png` virtual buffer is marked and starts with its source directory;
   - `setup({ lsp = false })` leaves the client disabled.
 - The test must use `PICO_LSP_BIN` and an installed server binary.
 - Add a CI job that installs Neovim 0.11.x and 0.12.x, builds or downloads a

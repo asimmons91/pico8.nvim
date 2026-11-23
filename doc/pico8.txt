@@ -18,7 +18,7 @@ git repository. Carts in different directories use separate clients. Override
 repository-wide symbols.
 
 Options:
-    `cmd`           server command (string or list)
+    `cmd`           server command (string, list, or function)
     `lsp`           enable the client during setup (default true)
     `disable`       disable the helper and LSP setup
     `settings`      pico8 server settings table
