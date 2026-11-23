@@ -58,6 +58,11 @@
 - Use Conventional Commits: `<type>(<optional scope>): <description>`, with an
   imperative, lowercase description and no trailing period.
 - Push the branch and open a PR; do not bypass branch protection.
+- After opening the PR, run the `code-review` skill in PR mode. Address every
+  validated finding, run the relevant tests, and push the fixes to the same
+  branch so the PR is updated. Re-run the review after substantive follow-up
+  changes.
+- Merge only when the review has no unresolved findings and CI is green.
 
 ## Documentation rules
 
