@@ -68,7 +68,8 @@ repository is the canonical client source.
 ## Recommended order
 
 1. **P0** — keep the skeleton green.
-2. **M25–M26** — finish the config and harden the include helper.
+2. **M25** — configuration foundation (complete). **M26** — harden the include
+   helper.
 3. **M27–M31** — visible and ergonomic client features.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.

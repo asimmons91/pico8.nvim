@@ -33,13 +33,16 @@ Command resolution:
 - `cmd` in `require("pico_lsp").setup()` and a user
   `vim.lsp.config("pico_lsp", { cmd = ... })` call override the shipped value;
   whichever runs last wins.
-- A table `cmd` is preserved. A string is normalized to a one-element list
-  because Neovim's LSP client rejects a bare string.
+- `setup` normalizes a `cmd` string to a one-element list and preserves a table
+  or function. The shipped config normalizes string values from
+  `vim.g.pico_lsp_cmd` and `PICO_LSP_BIN`. A value passed directly to
+  `vim.lsp.config` must already be a list or function; Neovim does not normalize
+  it.
 
-`cmd` and `settings` are merged into `vim.lsp.config("pico_lsp", ...)` when
-`lsp` is enabled. The shipped `lsp/pico_lsp.lua` contains no `settings` table;
-`pico-lsp` owns the defaults. The helper reads the same merged config and merges
-its own `settings` overrides on top.
+`cmd` and `settings` are merged into `vim.lsp.config("pico_lsp", ...)` during
+setup, including when `lsp = false`; that option only controls
+`vim.lsp.enable`. The shipped `lsp/pico_lsp.lua` contains no `settings` table;
+`pico-lsp` owns the defaults. The helper reads the same merged config.
 
 ### Workspace root
 
@@ -52,16 +55,19 @@ Override the root before opening carts if you want repository-wide symbols:
 ```lua
 vim.lsp.config("pico_lsp", {
   root_dir = function(bufnr, on_dir)
-    local git = vim.fs.root(bufnr, { ".git" })
-    if git then
-      on_dir(git)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" then
+      return
     end
+    local git = vim.fs.root(bufnr, { ".git" })
+    on_dir(git or vim.fs.dirname(vim.fs.normalize(name)))
   end,
 })
 ```
 
-The override replaces the shipped callback; it is not merged. An existing
-client keeps its root until it restarts.
+The example uses the git root when one exists and falls back to the cart
+directory otherwise. The override replaces the shipped callback; it is not
+merged. An existing client keeps its root until it restarts.
 
 ### Disable the helper
 
@@ -119,7 +125,14 @@ require("pico_lsp").setup({ lsp = false })
 vim.lsp.config("pico_lsp", {
   cmd = { "pico-lsp" },
   filetypes = { "pico8" },
-  root_markers = { ".git" },
+  root_dir = function(bufnr, on_dir)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" then
+      return
+    end
+    local git = vim.fs.root(bufnr, { ".git" })
+    on_dir(git or vim.fs.dirname(vim.fs.normalize(name)))
+  end,
   settings = {
     pico8 = { typeChecking = "strict" },
   },

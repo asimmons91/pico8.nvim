@@ -60,9 +60,12 @@ vim.opt.runtimepath:append("/path/to/pico8.nvim")
 require("pico_lsp").setup()
 ```
 
-Only `lsp/pico_lsp.lua` is required for base LSP setup. The plugin also ships
-`ftdetect`, `ftplugin`, `syntax`, the cart-owned `.lua` helper, and commands;
-those runtime files add editor behavior beyond starting the client.
+`lsp/pico_lsp.lua` is the only LSP configuration file, and it attaches to
+buffers whose filetype is `pico8`. Neovim 0.11+ loads it from `runtimepath`.
+The plugin also ships `ftdetect` (which assigns that filetype to `.p8` files),
+`ftplugin`, `syntax`, the cart-owned `.lua` helper, and commands. Keep the
+plugin on `runtimepath` or lazy-load it before the first cart opens so those
+runtime files are available.
 
 ### Workspace root
 
@@ -78,16 +81,20 @@ cart:
 ```lua
 vim.lsp.config("pico_lsp", {
   root_dir = function(bufnr, on_dir)
-    local git = vim.fs.root(bufnr, { ".git" })
-    if git then
-      on_dir(git)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" then
+      return
     end
+    local git = vim.fs.root(bufnr, { ".git" })
+    on_dir(git or vim.fs.dirname(vim.fs.normalize(name)))
   end,
 })
 ```
 
-There is no default `.git` fallback. A user override replaces the shipped
-callback; the two roots are not merged.
+The example uses the git root when one exists and falls back to the cart
+directory otherwise. There is no default `.git` fallback in the shipped
+config. A user override replaces the shipped callback; the two roots are not
+merged.
 
 ### Server binary
 
@@ -144,9 +151,10 @@ The shipped config does not repeat server defaults. `settings` is merged into
 
 Command resolution checks `vim.g.pico_lsp_cmd`, then `PICO_LSP_BIN`, then
 `pico-lsp` on `PATH`; `setup({ cmd = ... })` and a later
-`vim.lsp.config("pico_lsp", { cmd = ... })` override the shipped value. A string
-is normalized to a one-element list. See
-[configuration](docs/configuration.md) for root overrides and the server
+`vim.lsp.config("pico_lsp", { cmd = ... })` override the shipped value.
+`setup` and the shipped config normalize string commands to a one-element list;
+a value passed directly to `vim.lsp.config` must already be a list or function.
+See [configuration](docs/configuration.md) for root overrides and the server
 settings reference.
 
 ## Documentation
@@ -167,9 +175,9 @@ PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 ```
 
 The tests create temporary carts and exercise config resolution, command-line
-overrides, cart and include roots, attachment, PNG opening, glyph insertion, and
-fallback behavior. The CI workflow checks out the server and builds a test
-binary on Neovim 0.11 and 0.12.
+overrides, cart and include roots, attachment without a shipped config, PNG
+opening, glyph insertion, and fallback behavior. The CI workflow checks out the
+server and builds a test binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

@@ -93,7 +93,7 @@ end
 
 vim.g.pico_lsp_cmd = { "/opt/pico-lsp", "--stdio" }
 shipped = load_shipped()
-if #shipped.cmd ~= 2 or shipped.cmd[2] ~= "--stdio" then
+if #shipped.cmd ~= 2 or shipped.cmd[1] ~= "/opt/pico-lsp" or shipped.cmd[2] ~= "--stdio" then
   fail("vim.g.pico_lsp_cmd list was not preserved")
 end
 
@@ -108,6 +108,12 @@ vim.env.PICO_LSP_BIN = ""
 shipped = load_shipped()
 if #shipped.cmd ~= 1 or shipped.cmd[1] ~= "pico-lsp" then
   fail("empty command environment did not fall through to pico-lsp")
+end
+
+vim.g.pico_lsp_cmd = { 42 }
+shipped = load_shipped()
+if #shipped.cmd ~= 1 or shipped.cmd[1] ~= "pico-lsp" then
+  fail("malformed vim.g.pico_lsp_cmd did not fall through to pico-lsp")
 end
 
 vim.g.pico_lsp_cmd = saved_cmd
@@ -153,14 +159,41 @@ vim.api.nvim_buf_delete(unnamed, { force = true })
 
 local virtual = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(virtual, "pico8-cart://cart.p8")
+if not vim.api.nvim_buf_get_name(virtual):match("^pico8%-cart:") then
+  -- Neovim 0.11 expands the URI; the helper marks the buffer instead.
+  vim.b[virtual].pico8_virtual_cart = true
+end
 if #roots_for(virtual) ~= 0 then
   fail("root_dir activated for a pico8-cart: virtual buffer")
 end
 vim.api.nvim_buf_delete(virtual, { force = true })
 
+local marked_virtual = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_name(marked_virtual, tmp .. "/marked/cart.p8")
+vim.b[marked_virtual].pico8_virtual_cart = true
+if #roots_for(marked_virtual) ~= 0 then
+  fail("root_dir activated for a marked virtual cart")
+end
+vim.api.nvim_buf_delete(marked_virtual, { force = true })
+
+local misleading = vim.api.nvim_create_buf(false, false)
+vim.api.nvim_buf_set_name(misleading, tmp .. "/pico8-cart:demo/cart.p8")
+local misleading_roots = roots_for(misleading)
+if #misleading_roots ~= 1 then
+  fail("root_dir skipped a real cart under a pico8-cart:name directory")
+end
+if vim.fs.normalize(misleading_roots[1]) ~= vim.fs.normalize(tmp .. "/pico8-cart:demo") then
+  fail("real pico8-cart:name directory root is " .. misleading_roots[1])
+end
+vim.api.nvim_buf_delete(misleading, { force = true })
+
 -- Activation opt-out ----------------------------------------------------------
 
-require("pico_lsp").setup({ lsp = false })
+require("pico_lsp").setup({ lsp = false, cmd = binary })
+config = get_config()
+if type(config.cmd) ~= "table" or config.cmd[1] ~= binary then
+  fail("setup cmd was not applied when lsp is false")
+end
 if vim.lsp.is_enabled and vim.lsp.is_enabled("pico_lsp") then
   fail("setup({ lsp = false }) enabled the client")
 end
@@ -215,6 +248,14 @@ local lib_client = client_for(vim.api.nvim_get_current_buf())
 if lib_client.id ~= client_a.id then
   fail("helper attached included .lua to client " .. lib_client.id .. " instead of " .. client_a.id)
 end
+local helper_settings = lib_client.config.settings
+if helper_settings and helper_settings.pico8 then
+  for _, key in ipairs({ "apiVersion", "typeChecking", "inlayHints" }) do
+    if helper_settings.pico8[key] ~= nil then
+      fail("helper duplicated the server default for " .. key)
+    end
+  end
+end
 
 -- A user root_dir override wins over the shipped callback ---------------------
 
@@ -238,10 +279,25 @@ end, "user root_dir override did not win for a new cart")
 for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp" })) do
   client:stop(true)
 end
-vim.wait(2000, function()
+if not vim.wait(2000, function()
   return #vim.lsp.get_clients({ name = "pico_lsp" }) == 0
-end, 20)
-vim.fn.delete(tmp, "rf")
+end, 20) then
+  fail("clients did not stop during cleanup")
+end
+
+local normalized_tmp = vim.fs.normalize(tmp)
+for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name ~= "" then
+    local normalized = vim.fs.normalize(name)
+    if normalized == normalized_tmp or normalized:sub(1, #normalized_tmp + 1) == normalized_tmp .. "/" then
+      pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    end
+  end
+end
+if vim.fn.delete(tmp, "rf") ~= 0 then
+  fail("could not remove the temporary directory")
+end
 
 print("pico8.nvim config: ok")
 vim.cmd("qa!")

@@ -19,10 +19,11 @@ local function command()
   return { "pico-lsp" }
 end
 
--- Neovim 0.11 expands URI-like buffer names to absolute paths, so a
--- `pico8-cart:` virtual buffer may appear as `<cwd>/pico8-cart:...`.
-local function is_virtual(name)
-  return name:match("^pico8%-cart:") ~= nil or name:match("[/\\]pico8%-cart:") ~= nil
+-- Neovim 0.11 expands URI-like buffer names to absolute paths, so the helper
+-- marks its virtual PNG buffers with `pico8_virtual_cart`. A scheme-prefixed
+-- name covers Neovim 0.12 and buffers created without the marker.
+local function is_virtual(bufnr, name)
+  return vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil
 end
 
 return {
@@ -30,7 +31,7 @@ return {
   filetypes = { "pico8" },
   root_dir = function(bufnr, on_dir)
     local name = vim.api.nvim_buf_get_name(bufnr)
-    if name == "" or is_virtual(name) then
+    if name == "" or is_virtual(bufnr, name) then
       return
     end
     on_dir(vim.fs.dirname(vim.fs.normalize(name)))

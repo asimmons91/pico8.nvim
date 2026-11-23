@@ -15,10 +15,12 @@ Users can override it:
 vim.lsp.config("pico_lsp", {
   cmd = { "/absolute/path/to/pico-lsp" },
   root_dir = function(bufnr, on_dir)
-    local git = vim.fs.root(bufnr, { ".git" })
-    if git then
-      on_dir(git)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" then
+      return
     end
+    local git = vim.fs.root(bufnr, { ".git" })
+    on_dir(git or vim.fs.dirname(vim.fs.normalize(name)))
   end,
   settings = {
     pico8 = { typeChecking = "strict" },

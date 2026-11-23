@@ -99,7 +99,7 @@ local function command()
   if type(configured) == "string" and configured ~= "" then
     return { configured }
   end
-  if type(configured) == "table" and #configured > 0 then
+  if type(configured) == "table" and #configured > 0 and type(configured[1]) == "string" then
     return configured
   end
   if vim.env.PICO_LSP_BIN and vim.env.PICO_LSP_BIN ~= "" then
@@ -108,12 +108,19 @@ local function command()
   return { "pico-lsp" }
 end
 
+-- Neovim 0.11 expands URI-like buffer names to absolute paths, so the helper
+-- marks its virtual PNG buffers with `pico8_virtual_cart`. A scheme-prefixed
+-- name covers Neovim 0.12 and buffers created without the marker.
+local function is_virtual(bufnr, name)
+  return vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil
+end
+
 return {
   cmd = command(),
   filetypes = { "pico8" },
   root_dir = function(bufnr, on_dir)
     local name = vim.api.nvim_buf_get_name(bufnr)
-    if name == "" or name:match("^pico8%-cart:") then
+    if name == "" or is_virtual(bufnr, name) then
       return
     end
     on_dir(vim.fs.dirname(vim.fs.normalize(name)))
@@ -140,8 +147,11 @@ Requirements:
 - A named `.p8` buffer uses the normalized directory containing the cart.
 - Unnamed buffers and `pico8-cart:` virtual buffers are not auto-activated by
   the base config. Return without calling `on_dir`; do not fabricate a root.
-  Neovim skips activation when the callback is not called. The helper starts
-  `.p8.png` virtual documents explicitly with the source directory.
+  Neovim skips activation when the callback is not called. Neovim 0.11 expands
+  URI-like buffer names to absolute paths, so the helper marks `.p8.png`
+  virtual buffers with `b:pico8_virtual_cart` and the callback recognizes that
+  marker as well as a scheme-prefixed name. The helper starts `.p8.png` virtual
+  documents explicitly with the source directory.
 - Do not call `on_dir(nil)` as a fallback for skipped buffers. The shipped
   config has no rootless activation path for unnamed or virtual buffers.
 - The helper continues to use the owning cart's directory as the root for
@@ -183,7 +193,8 @@ Requirements:
   a repository root when the user wants workspace-wide symbols.
 - Document `vim.g.pico_lsp_cmd` and `PICO_LSP_BIN` for local binaries.
 - Mention that the plugin also carries `ftdetect`, syntax, ftplugin, and the
-  helper, but that only the `lsp/` file is required for base LSP setup.
+  helper. `lsp/pico_lsp.lua` is the only LSP config file, but `ftdetect` is
+  still required to assign the `pico8` filetype that activates it.
 
 ### 5. Testing and CI
 
@@ -197,6 +208,8 @@ Requirements:
   - two carts in sibling directories use separate roots;
   - a user override of `root_dir` wins;
   - the helper attaches an included `.lua` file to the same client;
+  - the helper falls back to its own config and command resolution when
+    `lsp/pico_lsp.lua` is absent from `runtimepath`;
   - `setup({ lsp = false })` leaves the client disabled.
 - The test must use `PICO_LSP_BIN` and an installed server binary.
 - Add a CI job that installs Neovim 0.11.x and 0.12.x, builds or downloads a

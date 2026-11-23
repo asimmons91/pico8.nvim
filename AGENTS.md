@@ -10,7 +10,7 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25 is a skeleton; M26–M32 and M34 are proposed. M33 remains server-owned in
+- M25 is complete; M26–M32 and M34 are proposed. M33 remains server-owned in
   `pico-lsp`. M35 (Mason and LazyVim extra) is proposed.
 - `pico-lsp` remains the source of truth for the server, parser, analysis,
   formatter, diagnostics, and standard LSP capabilities. Do not add server code
