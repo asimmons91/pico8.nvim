@@ -17,6 +17,11 @@ local warned_glyph_maps = false
 -- Cart edits are coalesced for this long before the helper rescans includes.
 local RESCAN_DEBOUNCE_MS = 300
 
+-- BufUnload can be aborted by another autocmd; poll briefly for the buffer to
+-- be released, then stop. One hundred 10 ms retries is about one second.
+local UNLOAD_POLL_MS = 10
+local UNLOAD_RETRY_LIMIT = 100
+
 -- Parsed include sets per normalized cart path. Entries hold either a loaded
 -- buffer's changedtick or a disk file's mtime and size so a cache hit never
 -- re-reads the cart.
@@ -960,20 +965,27 @@ local function forget_cart(bufnr)
   invalidate_cart(cart)
   local generation = (unload_generations[cart] or 0) + 1
   unload_generations[cart] = generation
+  local attempts = 0
 
   local function finish()
     vim.defer_fn(function()
       if M.disabled or unload_generations[cart] ~= generation then
         return
       end
+      attempts = attempts + 1
       if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
-        finish()
+        if attempts < UNLOAD_RETRY_LIMIT then
+          finish()
+        else
+          unload_generations[cart] = nil
+          log_debug("pico-lsp: cart unload did not complete; leaving revalidation to the next rescan")
+        end
         return
       end
       unload_generations[cart] = nil
       invalidate_cart(cart)
       rescan()
-    end, 10)
+    end, UNLOAD_POLL_MS)
   end
 
   finish()
