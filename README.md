@@ -6,10 +6,11 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M25 is complete. The plugin ships native LSP configuration,
-cart-aware roots, one-call activation, and the cart-owned `.lua` helper.
-M26–M32 and M34 are proposed; M33 (range formatting, document links, and
-code-lens refresh) remains server work in `pico-lsp`.
+**Status:** M26 is complete. The plugin ships native LSP configuration,
+cart-aware roots, one-call activation, and a buffer-aware cart-owned `.lua`
+helper with managed attachment and `:Pico8Refresh`. M27–M32 and M34 are
+proposed; M33 (range formatting, document links, and code-lens refresh) remains
+server work in `pico-lsp`.
 
 ## Requirements
 
@@ -113,8 +114,9 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
   config after `require("pico_lsp").setup()` (or `opts = {}` with lazy.nvim).
 - Carts in plain, non-git directories use the cart directory as the client
   root; carts in different directories get separate roots.
-- Cart-owned `.lua` files attach through the helper. Buffer-aware unsaved
-  `#include` discovery is proposed in M26.
+- Cart-owned `.lua` files attach through the helper. An unsaved `#include` is
+  visible immediately, cart edits are rescanned after a short debounce, and the
+  helper only detaches clients it manages.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
   glyph maps work for `.p8` carts.
 - Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.
@@ -129,7 +131,7 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 | `:Pico8OpenPng [path]` | Decode a `.p8.png` cart into a read-only virtual buffer. |
 | `:Pico8ReloadPng` | Re-decode the current virtual `.p8.png` cart. |
 | `:Pico8InsertGlyph [name]` | Insert a P8SCII glyph or open the picker. |
-| `:Pico8Refresh` | Proposed in M26. |
+| `:Pico8Refresh` | Clear the include cache and rescan loaded buffers. |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Proposed in M28. |
 | `:checkhealth pico_lsp` | Proposed in M32. |
 
@@ -175,9 +177,10 @@ PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 ```
 
 The tests create temporary carts and exercise config resolution, command-line
-overrides, cart and include roots, attachment without a shipped config, PNG
-opening, glyph insertion, and fallback behavior. The CI workflow checks out the
-server and builds a test binary on Neovim 0.11 and 0.12.
+overrides, cart and include roots, attachment without a shipped config, unsaved
+includes, managed detach, multiple carts, PNG opening, glyph insertion, and
+fallback behavior. The CI workflow checks out the server and builds a test
+binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

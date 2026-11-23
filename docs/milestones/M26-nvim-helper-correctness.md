@@ -1,10 +1,12 @@
 # M26 — Neovim Helper Correctness and Performance
 
-**Status:** Proposed — not started.
+**Status:** Done — buffer-aware include discovery, include caching, root-matched
+client reuse, managed detach, debounced edits, `:Pico8Refresh`, tests, and
+documentation are complete.
 
 **Depends on:** pico-lsp M6 (server features), M25 (drop-in config and cart-aware roots)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -41,6 +43,14 @@ the helper never attaches the first cart's client to the second cart's include.
 | D9 | CI | Extend the headless Neovim job from M25 with the correctness cases in this milestone. |
 | D10 | Scope | No user-facing commands beyond `:Pico8Refresh`; no change to include semantics or server ownership rules. |
 
+### Resolved decisions
+
+- **D7:** the debounce is 300 ms.
+- **D2/D6:** `:Pico8Refresh` is registered even when the helper is disabled and
+  reports that state without scanning.
+- **D4:** a buffer that already has a user-started `pico_lsp` client is left
+  untouched; the helper never adds a second client or claims that attachment.
+
 ## Scope
 
 ### In scope
@@ -68,10 +78,11 @@ the helper never attaches the first cart's client to the second cart's include.
 
 1. `lua/pico_lsp/init.lua` — buffer-aware include discovery,
    cache, root matching, and managed detach.
-2. `tests/helper.lua` — extended headless cases.
+2. `tests/correctness.lua` and `tests/run.sh` — focused headless cases for the
+   helper correctness work.
 3. `.github/workflows/ci.yml` — Neovim test coverage from M25 extended with
    these cases.
-4. `README.md` and `docs/troubleshooting.md` — behavior and
+4. `README.md`, `docs/usage.md`, and `docs/troubleshooting.md` — behavior and
    recovery guidance.
 5. `docs/ROADMAP.md` — milestone status.
 
@@ -205,21 +216,23 @@ the helper never attaches the first cart's client to the second cart's include.
 
 ## Testing and CI
 
-- Extend `tests/helper.lua` or add a focused test file that:
-  - opens a cart and appends an unsaved `#include`, then opens the target and
-    asserts attachment;
-  - modifies a loaded cart's include list without saving and asserts the target
-    attaches or detaches after the debounce;
-  - opens two carts with the same include basename in sibling directories and
-    asserts each buffer uses the matching root;
-  - removes an include and asserts the managed client detaches;
-  - starts a `pico_lsp` client directly on an included `.lua` buffer, removes
-    the include, and asserts the user-started client remains attached;
-  - enters and leaves the same `.lua` buffer repeatedly and asserts one client
-    per root;
-  - calls `:Pico8Refresh` and asserts no duplicate clients;
-  - verifies an unrelated `.lua` file still does not attach;
-  - verifies a `.lua:2` include path is treated literally, matching the
+- `tests/correctness.lua`, run by `tests/run.sh`, covers:
+  - opening a cart and appending an unsaved `#include`, then opening the target
+    and asserting attachment;
+  - modifying a loaded cart's include list without saving and asserting the
+    target attaches or detaches after the debounce;
+  - opening two carts with the same include basename in sibling directories and
+    asserting each buffer uses the matching root;
+  - moving ownership between a parent cart and a nearer cart root;
+  - removing an include and asserting the managed client detaches;
+  - starting a `pico_lsp` client directly on an included `.lua` buffer,
+    removing the include, and asserting the user-started client remains
+    attached;
+  - entering and leaving the same `.lua` buffer repeatedly and asserting one
+    client per root;
+  - calling `:Pico8Refresh` and asserting no duplicate clients;
+  - verifying an unrelated `.lua` file still does not attach;
+  - verifying a `.lua:2` include path is treated literally, matching the
     server, and does not attach a `lib.lua` buffer.
 - Tests must wait on conditions with a bounded `vim.wait`, not fixed sleeps.
 - Run the suite on Neovim 0.11 and 0.12 in CI.
@@ -227,15 +240,15 @@ the helper never attaches the first cart's client to the second cart's include.
 
 ## Exit criteria
 
-- [ ] An unsaved `#include` attaches the included `.lua` buffer.
-- [ ] Editing or removing an include updates managed attachments after the
+- [x] An unsaved `#include` attaches the included `.lua` buffer.
+- [x] Editing or removing an include updates managed attachments after the
       debounce.
-- [ ] Clients are reused only for the matching cart root.
-- [ ] Multiple carts in sibling directories do not cross-attach.
-- [ ] Repeated buffer entry does not create duplicate clients.
-- [ ] The helper never detaches a client it did not manage.
-- [ ] `:Pico8Refresh` rescans safely and is idempotent.
-- [ ] Headless Neovim tests cover the cases above and run in CI.
+- [x] Clients are reused only for the matching cart root.
+- [x] Multiple carts in sibling directories do not cross-attach.
+- [x] Repeated buffer entry does not create duplicate clients.
+- [x] The helper never detaches a client it did not manage.
+- [x] `:Pico8Refresh` rescans safely and is idempotent.
+- [x] Headless Neovim tests cover the cases above and run in CI.
 
 ## Risks
 

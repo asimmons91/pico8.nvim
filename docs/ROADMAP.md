@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M25 is complete. The existing Neovim client surface is present and
-the inherited client milestones are proposed and unimplemented after M25.
+**Status:** M26 is complete. The existing Neovim client surface is present and
+the inherited client milestones after M26 are proposed and unimplemented.
 
 **Last updated:** 2026-11-23
 
@@ -44,7 +44,10 @@ repository is the canonical client source.
 - M25 is complete: shipped `lsp/pico_lsp.lua`, cart-aware roots, setup
   activation, merged helper config, config/root tests, CI matrix, and install
   documentation.
-- M26–M32 and M34 are proposed.
+- M26 is complete: buffer-aware include discovery and caching, root-matched
+  client reuse, managed detach and ownership revalidation, debounced cart-edit
+  rescans, and `:Pico8Refresh`.
+- M27–M32 and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
@@ -54,7 +57,7 @@ repository is the canonical client source.
 |---|---|---|---|---|
 | P0 | Skeleton extraction | Plugin layout, existing helper features, tests, grammar vendor, docs | — | Done |
 | M25 | Drop-in configuration | `lsp/pico_lsp.lua`, cart-aware roots, setup activation | pico-lsp M6 | Done |
-| M26 | Helper correctness | Buffer-aware includes, root-matched clients, managed detach | pico-lsp M6, M25 | Proposed |
+| M26 | Helper correctness | Buffer-aware includes, root-matched clients, managed detach | pico-lsp M6, M25 | Done |
 | M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Proposed |
 | M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Proposed |
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Proposed |
@@ -69,7 +72,7 @@ repository is the canonical client source.
 
 1. **P0** — keep the skeleton green.
 2. **M25** — configuration foundation (complete). **M26** — harden the include
-   helper.
+   helper (complete).
 3. **M27–M31** — visible and ergonomic client features.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.
@@ -120,6 +123,10 @@ falls back to `gf` when document links and range formatting are unavailable.
 M25's cart-directory root strategy was confirmed on 2026-11-23. The shipped
 config does not walk to `.git`; users can override `root_dir` for
 repository-wide symbols.
+
+M26's implementation choices were confirmed on 2026-11-23: a 300 ms debounce,
+`:Pico8Refresh` registered even when the helper is disabled, and existing
+user-started `pico_lsp` clients left untouched.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

@@ -15,7 +15,7 @@ The specifications have been adapted for this repository:
 | Milestone | Spec | Status |
 |---|---|---|
 | M25 | [Drop-in configuration](M25-nvim-drop-in-config.md) | Done |
-| M26 | [Helper correctness](M26-nvim-helper-correctness.md) | Proposed |
+| M26 | [Helper correctness](M26-nvim-helper-correctness.md) | Done |
 | M27 | [Code lens and inlay hints](M27-nvim-lens-inlay.md) | Proposed |
 | M28 | [Cart budget statusline](M28-nvim-cart-statusline.md) | Proposed |
 | M29 | [Included `.lua` settings](M29-nvim-include-buffers.md) | Proposed |

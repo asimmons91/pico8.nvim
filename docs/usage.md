@@ -43,17 +43,35 @@ Avoid running `lua_ls` and `pico_lsp` on the same cart-owned `.lua` buffer.
 
 ## Included `.lua` files
 
-The helper walks up from a `.lua` buffer to find a nearby `.p8` cart that
-includes it, then starts or reuses the `pico_lsp` client with the cart
+The helper walks up from a `.lua` buffer to find the nearest `.p8` cart that
+includes it, then starts or reuses the `pico_lsp` client with that cart's
 directory as `root_dir`.
 
 It:
 
+- reads a loaded cart buffer, so an unsaved `#include` is visible as soon as the
+  included file is opened;
+- reads an unloaded cart from disk and caches its include set by mtime and size;
 - ignores unrelated `.lua` buffers;
-- does not create duplicate clients for the same cart;
-- re-scans loaded `.lua` buffers after a `.p8` file is saved.
+- reuses a client only when its root matches the cart directory, so carts in
+  sibling directories never cross-attach;
+- rescans loaded `.lua` buffers after a cart save and 300 ms after cart edits;
+- records the attachments it creates and detaches only those when an include
+  disappears or moves to a cart with a different root.
 
-Buffer-aware discovery of unsaved `#include` changes is proposed in M26.
+If a `.lua` buffer already has a `pico_lsp` client, the helper leaves it alone.
+That includes clients you start yourself. The helper never detaches an
+attachment it did not record.
+
+Use `:Pico8Refresh` to clear the include cache and rescan loaded buffers after
+an external tool changes a cart:
+
+```vim
+:Pico8Refresh
+```
+
+The command is safe with no carts open and when the helper is disabled; in the
+disabled case it reports that state and does no scanning.
 
 Enable the helper with `require("pico_lsp").setup()` (the default when the
 plugin is installed through lazy.nvim). Disable it with:
@@ -202,7 +220,7 @@ end)
 | `:Pico8OpenPng [path]` | Available |
 | `:Pico8ReloadPng` | Available |
 | `:Pico8InsertGlyph [name]` | Available |
-| `:Pico8Refresh` | Proposed (M26) |
+| `:Pico8Refresh` | Available |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Proposed (M28) |
 | `:Pico8OpenCart` | Proposed (M29) |
 | `:checkhealth pico_lsp` | Proposed (M32) |
