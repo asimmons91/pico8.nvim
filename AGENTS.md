@@ -17,7 +17,8 @@
   clients, tracks helper-managed attachments, revalidates ownership, and
   rescans cart saves/reloads plus cart edits after a 300 ms debounce.
   `:Pico8Refresh` clears the cache and rescans; it is registered even when the
-  helper is disabled. An enabled re-`setup()` preserves managed records.
+  helper is disabled. A re-`setup()` while the client is already enabled, and a
+  plugin module reload, preserve managed attachments.
 - `pico-lsp` remains the source of truth for the server, parser, analysis,
   formatter, diagnostics, and standard LSP capabilities. Do not add server code
   here.

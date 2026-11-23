@@ -90,8 +90,9 @@ or `vim.g.pico_lsp_helper_disabled = 1`.
 Disabling detaches the cart-owned `.lua` attachments the helper created. A
 `pico_lsp` client you started yourself remains attached. A fresh disabled setup
 registers only `:Pico8Refresh`, which reports the disabled state; commands
-already registered by an earlier enabled setup also report it. Re-running an
-enabled setup keeps existing helper-managed and user-started clients attached.
+already registered by an earlier enabled setup also report it. Re-running setup
+while `pico_lsp` is already enabled keeps existing helper-managed and
+user-started clients attached.
 
 The `.p8` ftplugin sets PICO-8 comment options for carts:
 

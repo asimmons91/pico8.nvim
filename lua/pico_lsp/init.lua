@@ -34,6 +34,8 @@ local managed = {}
 -- One debounce timer and generation per cart being edited.
 local rescan_timers = {}
 local rescan_generations = {}
+-- Tracks a pending post-unload revalidation so a reload can cancel it.
+local unload_generations = {}
 
 local function notify(message, level)
   vim.notify("pico-lsp: " .. message, level or vim.log.levels.WARN)
@@ -715,6 +717,7 @@ local function attach(bufnr)
     end
   end
 
+  client._pico8_helper = true
   managed[bufnr] = {
     client_id = client.id,
     root_dir = root_dir,
@@ -780,6 +783,50 @@ local function revalidate_managed()
   end
 end
 
+-- A plugin/module reload creates a new module instance with an empty managed
+-- map while Neovim keeps the clients. Re-adopt clients this helper started
+-- (marked below) when their cart still owns the buffer, and detach marked
+-- clients whose owner is gone or changed. User-started clients are unmarked, so
+-- they remain untouched.
+local function adopt_marked_clients()
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      local lower = name:lower()
+      local is_lua = vim.bo[bufnr].filetype == "lua" or lower:sub(-4) == ".lua"
+      if is_lua then
+        local cart = name ~= "" and find_cart(normalize(name)) or nil
+        local directory = cart and vim.fs.dirname(cart) or nil
+        local root_dir = directory and normalize(directory) or nil
+        local adopted = false
+        local attached = vim.lsp.get_clients({
+          name = "pico_lsp",
+          bufnr = bufnr,
+          _uninitialized = true,
+        })
+        for _, client in ipairs(attached) do
+          if client._pico8_helper then
+            if not adopted and cart and root_dir and root_matches(client, root_dir) then
+              managed[bufnr] = {
+                client_id = client.id,
+                root_dir = root_dir,
+                cart = cart,
+                cart_uri = vim.uri_from_fname(cart),
+              }
+              adopted = true
+            else
+              local ok, err = pcall(vim.lsp.buf_detach_client, bufnr, client.id)
+              if not ok then
+                log_debug("pico-lsp: could not detach orphaned helper client: " .. tostring(err))
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 local function attach_loaded_lua_buffers()
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(bufnr) then
@@ -820,6 +867,7 @@ local function cancel_rescans()
     close_rescan_timer(cart)
   end
   rescan_generations = {}
+  unload_generations = {}
 end
 
 local function schedule_rescan(cart)
@@ -873,13 +921,14 @@ local function rescan_cart(bufnr)
   end
   local cart = normalize(name)
   close_rescan_timer(cart)
+  unload_generations[cart] = nil
   invalidate_cart(cart)
   rescan()
 end
 
 -- An unloaded or deleted cart buffer no longer supplies include data. Drop its
--- cache and revalidate after the unload settles so managed includes follow the
--- disk contents instead of the stale loaded-buffer entry.
+-- cache and revalidate once the unload has actually finished; another autocmd
+-- may yield before the buffer is released, so retry until it is unloaded.
 local function forget_cart(bufnr)
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" then
@@ -888,11 +937,25 @@ local function forget_cart(bufnr)
   local cart = normalize(name)
   close_rescan_timer(cart)
   invalidate_cart(cart)
-  vim.schedule(function()
-    if not M.disabled then
+  local generation = (unload_generations[cart] or 0) + 1
+  unload_generations[cart] = generation
+
+  local function finish()
+    vim.defer_fn(function()
+      if M.disabled or unload_generations[cart] ~= generation then
+        return
+      end
+      if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+        finish()
+        return
+      end
+      unload_generations[cart] = nil
+      invalidate_cart(cart)
       rescan()
-    end
-  end)
+    end, 10)
+  end
+
+  finish()
 end
 
 function M.refresh()
@@ -933,6 +996,9 @@ function M.setup(opts)
   include_cache = {}
   include_cache_order = {}
   owner_cache = {}
+  -- Rebuild records from clients this helper started, so a plugin module
+  -- reload (which starts with an empty managed map) can still detach them.
+  adopt_marked_clients()
   -- Preserve managed attachments across an enabled re-setup (config reload or
   -- plugin reload). Disabling the helper is a shutdown: detach only the clients
   -- it recorded, then clear the state.

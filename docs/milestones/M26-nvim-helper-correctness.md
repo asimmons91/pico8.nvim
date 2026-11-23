@@ -53,9 +53,9 @@ the helper never attaches the first cart's client to the second cart's include.
   cached data and revalidates.
 - **D4:** a buffer that already has a user-started `pico_lsp` client is left
   untouched; the helper never adds a second client or claims that attachment.
-- **D4/D5:** an enabled re-`setup()` preserves managed records without
-  re-running the native enable sweep; disabling the helper detaches the records
-  it owns and only those.
+- **D4/D5:** a re-`setup()` while `pico_lsp` is already enabled preserves
+  managed records without re-running the native enable sweep; disabling the
+  helper detaches the records it owns and only those.
 
 ## Scope
 
@@ -211,7 +211,9 @@ the helper never attaches the first cart's client to the second cart's include.
 
 - `require("pico_lsp").setup(opts)` keeps its existing options.
 - New command: `:Pico8Refresh`.
-- Module-local cache and managed-attachment state; no new global variables.
+- Module-local cache and managed-attachment state; helper-started clients carry
+  a private marker so a module reload can re-adopt them; no new global
+  variables.
 - No new LSP request, response, server command, or setting.
 - `vim.b.pico8_cart` and comment settings are added by M29, not this milestone.
 
@@ -250,8 +252,10 @@ the helper never attaches the first cart's client to the second cart's include.
   - asserting a loaded cart buffer stays authoritative for `:Pico8Refresh` when
     disk disagrees;
   - renaming a managed `.lua` buffer and asserting the helper client detaches;
-  - re-running an enabled setup and asserting managed attachments and
-    user-started clients survive;
+  - re-running setup while `pico_lsp` is already enabled and asserting managed
+    attachments and user-started clients survive;
+  - simulating a plugin module reload and asserting marked helper clients are
+    re-adopted while user-started clients remain;
   - disabling the helper and asserting managed attachments detach while a
     user-started client remains;
   - invoking disabled commands and asserting they do not start clients or edit
@@ -278,9 +282,11 @@ the helper never attaches the first cart's client to the second cart's include.
 - [x] Saving or reloading a cart applies its new include list immediately, and
       unloading or wiping it revalidates against disk.
 - [x] Renaming a managed `.lua` buffer detaches its helper-owned client.
-- [x] Re-running setup while enabled preserves managed attachments and
-      user-started clients, and disabling the helper detaches only its managed
-      attachments.
+- [x] Re-running setup while `pico_lsp` is already enabled preserves managed
+      attachments and user-started clients, and disabling the helper detaches
+      only its managed attachments.
+- [x] A plugin module reload re-adopts helper-managed clients without claiming
+      user-started clients.
 - [x] Clients are reused only for the matching cart root.
 - [x] Multiple carts in sibling directories do not cross-attach.
 - [x] Repeated buffer entry does not create duplicate clients.

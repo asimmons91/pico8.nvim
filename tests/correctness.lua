@@ -81,6 +81,18 @@ local function fire_text_changed(bufnr)
   vim.api.nvim_exec_autocmds("TextChanged", { buffer = bufnr })
 end
 
+-- Wait for callbacks queued before this call (for example BufUnload's
+-- scheduled rescan) to run without using a fixed sleep.
+local function drain_schedule()
+  local done = false
+  vim.schedule(function()
+    done = true
+  end)
+  wait_for(function()
+    return done
+  end, "scheduled callbacks did not run")
+end
+
 local function assert_root(client, directory, message)
   if root_of(client) ~= vim.fs.normalize(directory) then
     fail(message .. ": root is " .. root_of(client) .. " instead of " .. directory)
@@ -457,14 +469,27 @@ wait_for(function()
 end, "helper did not attach cart U's include")
 expected_client(lib_u_buf, client_u.id, "cart U's include did not use cart U's client")
 
--- An external removal becomes visible once the cart buffer is unloaded.
+-- An external removal becomes visible once the cart buffer is unloaded. Another
+-- BufUnload autocmd yields before the unload finishes, so the revalidation must
+-- wait for the buffer to be released.
+local yield_group = vim.api.nvim_create_augroup("pico8_correctness_yield_unload", { clear = true })
+vim.api.nvim_create_autocmd("BufUnload", {
+  group = yield_group,
+  pattern = "*.p8",
+  callback = function()
+    vim.wait(50, function()
+      return false
+    end)
+  end,
+})
 write(cart_u, cart_lines(nil))
 vim.cmd("bunload! " .. cart_u_buf)
 wait_for(function()
   return #clients(lib_u_buf) == 0
 end, "unloading a cart did not revalidate its includes")
+vim.api.nvim_del_augroup_by_id(yield_group)
 
--- Wiping a cart buffer revalidates against disk -------------------------------
+-- Wiping an unloaded cart buffer revalidates against disk ---------------------
 
 local project_w = tmp .. "/project-w"
 local cart_w = project_w .. "/cart.p8"
@@ -484,12 +509,17 @@ wait_for(function()
 end, "helper did not attach cart W's include")
 expected_client(lib_w_buf, client_w.id, "cart W's include did not use cart W's client")
 
--- The cart file loses the include externally; wiping the buffer must detach it.
+-- Unload first while disk still includes the buffer. The unload rescan must
+-- keep the attachment, so only BufWipeout can act on the later external change.
+vim.cmd("bunload! " .. cart_w_buf)
+drain_schedule()
+expected_client(lib_w_buf, client_w.id, "unloading a cart detached an include still on disk")
+
 write(cart_w, cart_lines(nil))
-vim.api.nvim_buf_delete(cart_w_buf, { force = true })
+vim.cmd("bwipeout! " .. cart_w_buf)
 wait_for(function()
   return #clients(lib_w_buf) == 0
-end, "wiping a cart did not detach a removed include")
+end, "wiping an unloaded cart did not detach a removed include")
 
 -- Reloading a cart picks up external include changes ---------------------------
 
@@ -640,6 +670,15 @@ expected_client(lib_h_buf, client_h.id, "cart H's include did not use cart H's c
 require("pico_lsp").setup()
 expected_client(fresh_buf, user_client_id, "enabled setup detached a user-managed client")
 expected_client(lib_h_buf, client_h.id, "enabled setup detached a managed client")
+
+-- Simulate a plugin module reload: the new module starts with an empty managed
+-- map and must re-adopt the marked helper clients.
+package.loaded["pico_lsp"] = nil
+local reloaded = require("pico_lsp")
+reloaded.setup()
+expected_client(fresh_buf, user_client_id, "module reload detached a user-managed client")
+expected_client(lib_h_buf, client_h.id, "module reload lost a managed client")
+
 set_cart_includes(cart_h_buf, {})
 fire_text_changed(cart_h_buf)
 wait_for(function()
