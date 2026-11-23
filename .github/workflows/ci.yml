@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  neovim:
+    name: Neovim ${{ matrix.neovim }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim:
+          - v0.11.4
+          - v0.12.6
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: asimmons91/pico-lsp
+          path: pico-lsp-src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pico-lsp-src/go.mod
+          cache-dependency-path: pico-lsp-src/go.sum
+
+      - name: Build pico-lsp test binary
+        working-directory: pico-lsp-src
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/bin"
+          CGO_ENABLED=0 go build -trimpath -o "$GITHUB_WORKSPACE/bin/pico-lsp" ./cmd/pico-lsp
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - name: Run headless plugin tests
+        env:
+          PICO_LSP_BIN: ${{ github.workspace }}/bin/pico-lsp
+        run: |
+          tests/run.sh

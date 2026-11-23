@@ -1,0 +1,45 @@
+*pico8.nvim* *pico8*
+
+Neovim client for pico-lsp, a PICO-8 language server.
+
+==============================================================================
+SETUP                                                         *pico8-setup*
+
+Call: >lua
+    require("pico_lsp").setup()
+<
+The default setup enables the `pico_lsp` client for `pico8` buffers and starts
+the helper for cart-owned `.lua` files.
+
+Options:
+    `cmd`           server command (string or list)
+    `lsp`           enable the client during setup (default true)
+    `disable`       disable the helper and LSP setup
+    `settings`      pico8 server settings table
+
+A lazy.nvim spec: >lua
+    { "asimmons91/pico8.nvim", main = "pico_lsp", lazy = false, opts = {} }
+<
+==============================================================================
+COMMANDS                                                   *pico8-commands*
+
+:Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer.
+:Pico8ReloadPng          Reload the current decoded PNG cart.
+:Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
+
+Proposed commands: `:Pico8Refresh`, `:Pico8CartInfo`, `:Pico8Tabs`,
+`:Pico8OpenCart`, and `:Pico8InstallParser`.
+
+==============================================================================
+VARIABLES                                                 *pico8-variables*
+
+`g:pico8_glyph_maps`     Enable Shift-A..Shift-Z glyph maps.
+`g:pico_lsp_cmd`         Override the server command.
+`g:pico_lsp_helper_disabled` Disable the included `.lua` helper.
+
+==============================================================================
+ROADMAP                                                     *pico8-roadmap*
+
+See `docs/ROADMAP.md` in the repository for milestones and release policy.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
