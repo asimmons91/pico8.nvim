@@ -36,7 +36,7 @@ end
 
 vim.filetype.add({ extension = { p8 = "pico8", lua = "lua" } })
 vim.g.pico_lsp_cmd = { 42 }
-require("pico_lsp").setup({ lsp = false, cmd = binary })
+require("pico_lsp").setup({ lsp = false })
 
 local config = vim.lsp.config["pico_lsp"]
 if type(config) ~= "table" then
@@ -48,6 +48,17 @@ end
 if type(config.root_dir) ~= "function" then
   fail("fallback config has no root_dir")
 end
+
+local virtual = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_name(virtual, "pico8-cart://cart.p8")
+local virtual_roots = 0
+config.root_dir(virtual, function()
+  virtual_roots = virtual_roots + 1
+end)
+if virtual_roots ~= 0 then
+  fail("fallback root_dir activated for a virtual buffer")
+end
+vim.api.nvim_buf_delete(virtual, { force = true })
 
 vim.cmd.edit(vim.fn.fnameescape(cart))
 vim.lsp.enable("pico_lsp")
