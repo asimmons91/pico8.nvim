@@ -11,14 +11,6 @@ local M = {}
 
 M.png_buffers = {}
 
-local default_settings = {
-  pico8 = {
-    apiVersion = "0.2.7",
-    typeChecking = "basic",
-    inlayHints = false,
-  },
-}
-
 local warned_missing_binary = false
 local warned_glyph_maps = false
 
@@ -108,13 +100,61 @@ local function normalize_cmd(cmd)
   if type(cmd) == "string" and cmd ~= "" then
     return { cmd }
   end
-  if type(cmd) == "table" and #cmd > 0 then
+  if type(cmd) == "table" and #cmd > 0 and type(cmd[1]) == "string" then
     return cmd
   end
   return nil
 end
 
-local function resolved_config(opts)
+local function valid_cmd(cmd)
+  if type(cmd) == "function" then
+    return cmd
+  end
+  return normalize_cmd(cmd)
+end
+
+-- Same precedence as lsp/pico_lsp.lua. Used only when the shipped config is
+-- absent, for example when the helper is loaded without `lsp/` on
+-- `runtimepath`.
+local function command()
+  local configured = vim.g.pico_lsp_cmd
+  if type(configured) == "string" and configured ~= "" then
+    return { configured }
+  end
+  if type(configured) == "table" and #configured > 0 and type(configured[1]) == "string" then
+    return configured
+  end
+  if vim.env.PICO_LSP_BIN and vim.env.PICO_LSP_BIN ~= "" then
+    return { vim.env.PICO_LSP_BIN }
+  end
+  return { "pico-lsp" }
+end
+
+local function is_virtual(bufnr, name)
+  if vim.b[bufnr].pico8_virtual_cart == true or name:match("^pico8%-cart:") ~= nil then
+    return true
+  end
+  return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
+end
+
+-- Minimal config for helper-only installs without `lsp/pico_lsp.lua`. It also
+-- gives manual `vim.lsp.enable("pico_lsp")` a complete config instead of a
+-- partial one that would attach a rootless client.
+local function fallback_config()
+  return {
+    cmd = command(),
+    filetypes = { "pico8" },
+    root_dir = function(bufnr, on_dir)
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name == "" or is_virtual(bufnr, name) then
+        return
+      end
+      on_dir(vim.fs.dirname(vim.fs.normalize(name)))
+    end,
+  }
+end
+
+local function resolved_config()
   local config
   local ok, value = pcall(function()
     return vim.lsp.config["pico_lsp"]
@@ -122,14 +162,14 @@ local function resolved_config(opts)
   if ok and type(value) == "table" then
     config = vim.deepcopy(value)
   else
-    config = {}
+    config = fallback_config()
   end
   config.name = "pico_lsp"
-  config.cmd = normalize_cmd(opts.cmd) or config.cmd or { "pico-lsp" }
-  config.settings = vim.tbl_deep_extend("force", default_settings, config.settings or {}, opts.settings or {})
+  config.cmd = valid_cmd(config.cmd) or command()
+  local settings = vim.deepcopy(config.settings or {})
+  config.settings = next(settings) ~= nil and settings or nil
   return config
 end
-
 
 local function ensure_client(root_dir, bufnr)
   local attached = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })
@@ -144,7 +184,7 @@ local function ensure_client(root_dir, bufnr)
       return attached[1]
     end
   end
-  local config = resolved_config(M.opts)
+  local config = resolved_config()
   config.root_dir = root_dir
   local started = vim.lsp.start(config, { bufnr = bufnr })
   if not started then
@@ -189,8 +229,9 @@ local function open_virtual(result)
   local buf = vim.api.nvim_create_buf(true, true)
   vim.api.nvim_buf_set_name(buf, result.virtualUri)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(result.text, "\n", { plain = true }))
-  vim.bo[buf].filetype = "pico8"
+  vim.b[buf].pico8_virtual_cart = true
   vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].filetype = "pico8"
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].swapfile = false
   vim.bo[buf].modifiable = false
@@ -214,7 +255,7 @@ function M.open_png(path)
     return
   end
   local buf = open_virtual(result)
-  local config = resolved_config(M.opts)
+  local config = resolved_config()
   config.root_dir = vim.fs.dirname(path)
   vim.lsp.start(config, { bufnr = buf })
   M.png_buffers[buf] = {
@@ -397,7 +438,7 @@ local function attach(bufnr)
     return
   end
 
-  local config = resolved_config(M.opts)
+  local config = resolved_config()
   local cmd = config.cmd
   if type(cmd) == "table" and cmd[1] and vim.fn.executable(cmd[1]) == 0 then
     if not warned_missing_binary then
@@ -438,18 +479,27 @@ function M.setup(opts)
     return
   end
 
+  -- Apply setup overrides to the merged config even when activation is left to
+  -- the caller. A later user vim.lsp.config call still wins.
+  local config = {}
+  local cmd = valid_cmd(opts.cmd)
+  if cmd then
+    config.cmd = cmd
+  end
+  if type(opts.settings) == "table" then
+    config.settings = opts.settings
+  end
+  local ok, existing = pcall(function()
+    return vim.lsp.config["pico_lsp"]
+  end)
+  if not (ok and type(existing) == "table") then
+    config = vim.tbl_deep_extend("force", fallback_config(), config)
+  end
+  if next(config) ~= nil then
+    vim.lsp.config("pico_lsp", config)
+  end
+
   if opts.lsp ~= false then
-    local config = {}
-    local cmd = normalize_cmd(opts.cmd)
-    if cmd then
-      config.cmd = cmd
-    end
-    if type(opts.settings) == "table" then
-      config.settings = opts.settings
-    end
-    if next(config) ~= nil then
-      vim.lsp.config("pico_lsp", config)
-    end
     local ok, err = pcall(vim.lsp.enable, "pico_lsp")
     if not ok then
       notify("could not enable pico_lsp: " .. tostring(err), vim.log.levels.ERROR)

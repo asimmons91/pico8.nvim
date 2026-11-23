@@ -9,13 +9,22 @@ Call: >lua
     require("pico_lsp").setup()
 <
 The default setup enables the `pico_lsp` client for `pico8` buffers and starts
-the helper for cart-owned `.lua` files.
+the helper for cart-owned `.lua` files. The shipped config has no side effects
+on its own; it is loaded from `lsp/pico_lsp.lua` on 'runtimepath'.
+
+`.p8` buffers use the cart's directory as the workspace root, even outside a
+git repository. Carts in different directories use separate clients. Override
+`root_dir` with `vim.lsp.config("pico_lsp", { ... })` before opening a cart for
+repository-wide symbols.
 
 Options:
-    `cmd`           server command (string or list)
+    `cmd`           server command (string, list, or function)
     `lsp`           enable the client during setup (default true)
     `disable`       disable the helper and LSP setup
     `settings`      pico8 server settings table
+
+The server owns setting defaults; the plugin does not duplicate them. The
+command falls back from `g:pico_lsp_cmd` to `$PICO_LSP_BIN` to `pico-lsp`.
 
 A lazy.nvim spec: >lua
     { "asimmons91/pico8.nvim", main = "pico_lsp", lazy = false, opts = {} }

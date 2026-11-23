@@ -315,6 +315,15 @@ if vim.fn.filereadable(png_fixture) == 1 then
   end, 50) then
     fail("Pico8OpenPng did not open an attached virtual buffer")
   end
+  local png_buf = vim.api.nvim_get_current_buf()
+  if not vim.b[png_buf].pico8_virtual_cart then
+    fail("Pico8OpenPng did not mark the virtual buffer")
+  end
+  local png_client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = png_buf })[1]
+  local png_root = vim.fs.normalize(png_client.config.root_dir or png_client.root_dir or "")
+  if png_root ~= vim.fs.normalize(vim.fs.dirname(png_fixture)) then
+    fail("Pico8OpenPng root is " .. png_root .. " instead of the fixture directory")
+  end
   if vim.bo.modifiable then
     fail("Pico8OpenPng opened a modifiable buffer")
   end

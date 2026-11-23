@@ -1,8 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** Skeleton extracted from `pico-lsp`. The existing Neovim client
-surface is present; the inherited client milestones are proposed and
-unimplemented except for the M25 skeleton.
+**Status:** M25 is complete. The existing Neovim client surface is present and
+the inherited client milestones are proposed and unimplemented after M25.
 
 **Last updated:** 2026-11-23
 
@@ -42,9 +41,9 @@ repository is the canonical client source.
 - P0 skeleton is complete: helper, `ftdetect`, `ftplugin`, syntax, tests,
   glyph picker, PNG commands, native `lsp/pico_lsp.lua`, lazy.nvim-friendly
   `setup`, vendored Tree-sitter parser sources, and the test fixture.
-- M25 is partially implemented: the shipped `lsp/pico_lsp.lua`, cart-aware
-  roots, setup activation, and command normalization are present. Config
-  tests, full documentation, and the final CI matrix remain.
+- M25 is complete: shipped `lsp/pico_lsp.lua`, cart-aware roots, setup
+  activation, merged helper config, config/root tests, CI matrix, and install
+  documentation.
 - M26–M32 and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
@@ -54,7 +53,7 @@ repository is the canonical client source.
 | ID | Milestone | Outcome | Depends on | Status |
 |---|---|---|---|---|
 | P0 | Skeleton extraction | Plugin layout, existing helper features, tests, grammar vendor, docs | — | Done |
-| M25 | Drop-in configuration | `lsp/pico_lsp.lua`, cart-aware roots, setup activation | pico-lsp M6 | Skeleton |
+| M25 | Drop-in configuration | `lsp/pico_lsp.lua`, cart-aware roots, setup activation | pico-lsp M6 | Done |
 | M26 | Helper correctness | Buffer-aware includes, root-matched clients, managed detach | pico-lsp M6, M25 | Proposed |
 | M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Proposed |
 | M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Proposed |
@@ -69,7 +68,8 @@ repository is the canonical client source.
 ## Recommended order
 
 1. **P0** — keep the skeleton green.
-2. **M25–M26** — finish the config and harden the include helper.
+2. **M25** — configuration foundation (complete). **M26** — harden the include
+   helper.
 3. **M27–M31** — visible and ergonomic client features.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.
@@ -117,12 +117,15 @@ falls back to `gf` when document links and range formatting are unavailable.
 
 ## Open decisions
 
-1. **M25 root strategy:** cart directory (recommended) versus repository root.
-2. **Server distribution:** Mason package versus PATH/installation docs;
+M25's cart-directory root strategy was confirmed on 2026-11-23. The shipped
+config does not walk to `.git`; users can override `root_dir` for
+repository-wide symbols.
+
+1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
-3. **Parser distribution:** vendored sources (current) versus prebuilt parser
+2. **Parser distribution:** vendored sources (current) versus prebuilt parser
    assets per OS/architecture.
-4. **LazyVim extra:** contribute upstream after the plugin and Mason package
+3. **LazyVim extra:** contribute upstream after the plugin and Mason package
    are stable, rather than treating a plugin as an extra.
-5. **Statusline surface:** a plain cached function first; optional lualine
+4. **Statusline surface:** a plain cached function first; optional lualine
    recipe, not a hard dependency.

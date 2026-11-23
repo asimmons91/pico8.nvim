@@ -14,15 +14,26 @@ Users can override it:
 ```lua
 vim.lsp.config("pico_lsp", {
   cmd = { "/absolute/path/to/pico-lsp" },
-  root_dir = vim.fn.getcwd(),
+  root_dir = function(bufnr, on_dir)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" then
+      return
+    end
+    local git = vim.fs.root(bufnr, { ".git" })
+    on_dir(git or vim.fs.dirname(vim.fs.normalize(name)))
+  end,
   settings = {
     pico8 = { typeChecking = "strict" },
   },
 })
 ```
 
+A user override replaces the shipped callback. Configure it before opening a
+cart; existing clients keep their root until they restart.
+
 Set `opts = { lsp = false }` to manage `vim.lsp.enable("pico_lsp")` yourself.
 
+The shipped config carries no server settings; `pico-lsp` owns the defaults.
 The same settings can be passed as `init_options = { pico8 = { ... } }` instead
 of `settings`. If the client supports `workspace/configuration`, the server
 pulls the `pico8` section after `initialized` and prefers pulled values per
