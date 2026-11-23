@@ -27,7 +27,16 @@ Options:
     `cmd`           server command (string, list, or function)
     `lsp`           enable the client during setup (default true)
     `disable`       disable the helper and LSP setup
+    `codelens`      enable client-side budget lens display (default true)
+    `inlay_hints`   enable client-side inlay-hint display (default true)
     `settings`      pico8 server settings table
+
+The shipped config enables the client-side display for the cart budget lens
+and inlay hints on `pico8` buffers. The server settings `pico8.limits.codeLens`
+and `pico8.inlayHints` decide what is returned; `inlayHints` defaults to false.
+Client-side options apply to clients started afterwards, so restart an existing
+client after changing them. `:Pico8ToggleInlayHints` toggles the display for a
+buffer and warns when the server setting is false or absent.
 
 The server owns setting defaults; the plugin does not duplicate them. The
 command falls back from `g:pico_lsp_cmd` to `$PICO_LSP_BIN` to `pico-lsp`.
@@ -42,6 +51,7 @@ COMMANDS                                                   *pico8-commands*
 :Pico8ReloadPng          Reload the current decoded PNG cart.
 :Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
 :Pico8Refresh            Clear the include cache and rescan loaded buffers.
+:Pico8ToggleInlayHints   Toggle client-side inlay hints for this buffer.
 
 Proposed commands: `:Pico8CartInfo`, `:Pico8Tabs`, `:Pico8OpenCart`, and
 `:Pico8InstallParser`.

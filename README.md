@@ -6,11 +6,12 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M26 is complete. The plugin ships native LSP configuration,
-cart-aware roots, one-call activation, and a buffer-aware cart-owned `.lua`
-helper with managed attachment and `:Pico8Refresh`. M27–M32 and M34 are
-proposed; M33 (range formatting, document links, and code-lens refresh) remains
-server work in `pico-lsp`.
+**Status:** M27 is complete. The plugin ships native LSP configuration,
+cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
+with managed attachment and `:Pico8Refresh`, and client-side enabling for the
+cart budget code lens and inlay hints. M28–M32 and M34 are proposed; M33 (range
+formatting, document links, and code-lens refresh) remains server work in
+`pico-lsp`.
 
 ## Requirements
 
@@ -117,12 +118,47 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - Cart-owned `.lua` files attach through the helper. An unsaved `#include` is
   visible immediately, cart saves and edits are rescanned, and the helper only
   detaches clients it manages.
+- The shipped config enables the cart budget code lens and inlay-hint display
+  for `pico8` buffers. `pico8.limits.codeLens` and `pico8.inlayHints` on the
+  server decide what appears; the latter defaults to off.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
   glyph maps work for `.p8` carts.
 - Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - The P8SCII glyph picker is available through `:Pico8InsertGlyph`.
 - `pico8/cartInfo` is available through the documented request; the cached
   statusline API is proposed in M28.
+
+### Opt-in LSP features
+
+The shipped config enables client-side display for the cart budget code lens
+and inferred-type inlay hints on `pico8` buffers. The server settings remain the
+feature switches:
+
+- `pico8.limits.codeLens` (default `true`) returns the budget lens.
+- `pico8.inlayHints` (default `false`) returns local type hints. Set it to
+  `true` in `settings` to see hints.
+
+Turn the client-side display off for clients started afterwards:
+
+```lua
+require("pico_lsp").setup({ codelens = false, inlay_hints = false })
+```
+
+Restart an existing client (`:LspRestart`) for setup changes to take effect.
+`:Pico8ToggleInlayHints` flips the display for the current buffer and warns when
+`pico8.inlayHints` is false or unset.
+
+The display is also enabled when you use the shipped `lsp/pico_lsp.lua` without
+calling setup. If you replace its `on_attach`, add the enablement yourself:
+
+```lua
+-- Neovim 0.12+
+vim.lsp.codelens.enable(true, { bufnr = bufnr })
+-- Neovim 0.11
+vim.lsp.codelens.refresh({ bufnr = bufnr })
+
+vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+```
 
 ## Commands
 
@@ -132,6 +168,7 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 | `:Pico8ReloadPng` | Re-decode the current virtual `.p8.png` cart. |
 | `:Pico8InsertGlyph [name]` | Insert a P8SCII glyph or open the picker. |
 | `:Pico8Refresh` | Clear the include cache and rescan loaded buffers. |
+| `:Pico8ToggleInlayHints` | Toggle client-side inlay hints for the current buffer. |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Proposed in M28. |
 | `:checkhealth pico_lsp` | Proposed in M32. |
 
@@ -142,6 +179,8 @@ require("pico_lsp").setup({
   cmd = { "pico-lsp" },       -- optional command override
   lsp = true,                 -- enable the pico_lsp client on setup
   disable = false,            -- disable the helper and LSP setup
+  codelens = true,            -- client-side budget lens display
+  inlay_hints = true,         -- client-side inlay-hint display
   settings = {                -- optional pico8 server settings
     pico8 = { typeChecking = "basic" },
   },

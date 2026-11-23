@@ -7,7 +7,8 @@ Installing the plugin and calling `require("pico_lsp").setup()` enables
 
 - `cmd = { "pico-lsp" }` unless overridden;
 - `filetypes = { "pico8" }`;
-- the cart directory as `root_dir`.
+- the cart directory as `root_dir`;
+- client-side display for the cart budget code lens and inlay hints.
 
 Users can override it:
 
@@ -209,9 +210,35 @@ vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename)
 vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action)
 ```
 
-The server publishes a budget code lens. Client-side display enablement is
-proposed in M27. The lens marks compressed budgets with `(warning)` from 90% of
-the limit and `(over limit)` above it.
+The server publishes a budget code lens on the root cart. The shipped config
+enables its client-side display, so it appears without extra setup. The lens
+marks compressed budgets with `(warning)` from 90% of the limit and
+`(over limit)` above it.
+
+Inferred local type hints appear when the server setting is on:
+
+```lua
+require("pico_lsp").setup({
+  settings = { pico8 = { inlayHints = true } },
+})
+```
+
+The client display is enabled by default. Turn either display off for clients
+started afterwards:
+
+```lua
+require("pico_lsp").setup({
+  codelens = false,
+  inlay_hints = false,
+})
+```
+
+`:LspRestart` after changing setup options. `:Pico8ToggleInlayHints` toggles the
+display for the current buffer without changing server settings; it warns when
+`pico8.inlayHints` is false or unset. If you replace the shipped `on_attach`,
+call `vim.lsp.codelens.enable(true, { bufnr = bufnr })` on Neovim 0.12+ (or
+`vim.lsp.codelens.refresh({ bufnr = bufnr })` on 0.11) and
+`vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })` yourself.
 
 A cached statusline API, `:Pico8CartInfo`, and `:Pico8Tabs` are proposed in
 M28. The current request is:
@@ -233,6 +260,7 @@ end)
 | `:Pico8ReloadPng` | Available |
 | `:Pico8InsertGlyph [name]` | Available |
 | `:Pico8Refresh` | Available |
+| `:Pico8ToggleInlayHints` | Available |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Proposed (M28) |
 | `:Pico8OpenCart` | Proposed (M29) |
 | `:checkhealth pico_lsp` | Proposed (M32) |

@@ -30,6 +30,15 @@ local function is_virtual(bufnr, name)
   return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
+-- Enable the client-side display for the cart budget lens and inferred-type
+-- inlay hints. The server settings remain the feature switches.
+local function on_attach(_, bufnr)
+  local ok, client = pcall(require, "pico_lsp.client")
+  if ok and client and type(client.attach) == "function" then
+    pcall(client.attach, bufnr)
+  end
+end
+
 return {
   cmd = command(),
   filetypes = { "pico8" },
@@ -40,4 +49,5 @@ return {
     end
     on_dir(vim.fs.dirname(vim.fs.normalize(name)))
   end,
+  on_attach = on_attach,
 }

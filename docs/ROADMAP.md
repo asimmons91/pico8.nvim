@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M26 is complete. The existing Neovim client surface is present and
-the inherited client milestones after M26 are proposed and unimplemented.
+**Status:** M27 is complete. The existing Neovim client surface is present and
+the inherited client milestones after M27 are proposed and unimplemented.
 
 **Last updated:** 2026-11-23
 
@@ -48,7 +48,11 @@ repository is the canonical client source.
   client reuse, managed detach and ownership revalidation, save/reload and
   debounced cart-edit rescans, `:Pico8Refresh`, and setup re-entry that keeps
   managed attachments.
-- M27–M32 and M34 are proposed.
+- M27 is complete: shipped `on_attach` enablement, per-buffer code lens and
+  inlay-hint display, `codelens`/`inlay_hints` setup options, a
+  `:Pico8ToggleInlayHints` command, and version-aware Neovim 0.11/0.12
+  behavior.
+- M28–M32 and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
@@ -59,7 +63,7 @@ repository is the canonical client source.
 | P0 | Skeleton extraction | Plugin layout, existing helper features, tests, grammar vendor, docs | — | Done |
 | M25 | Drop-in configuration | `lsp/pico_lsp.lua`, cart-aware roots, setup activation | pico-lsp M6 | Done |
 | M26 | Helper correctness | Buffer-aware includes, root-matched clients, managed detach | pico-lsp M6, M25 | Done |
-| M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Proposed |
+| M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Done |
 | M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Proposed |
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Proposed |
 | M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Proposed |
@@ -73,8 +77,8 @@ repository is the canonical client source.
 
 1. **P0** — keep the skeleton green.
 2. **M25** — configuration foundation (complete). **M26** — harden the include
-   helper (complete).
-3. **M27–M31** — visible and ergonomic client features.
+   helper (complete). **M27** — show the server's lens and hints (complete).
+3. **M28–M31** — visible and ergonomic client features.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.
 6. **M34** — parser installer.
@@ -129,6 +133,12 @@ M26's implementation choices were confirmed on 2026-11-23: a 300 ms debounce,
 `:Pico8Refresh` registered even when the helper is disabled, existing
 user-started `pico_lsp` clients left untouched, and a loaded cart buffer kept
 authoritative so external changes require a cart reload.
+
+M27's implementation choices were confirmed on 2026-11-23: the inlay toggle
+warns when `pico8.inlayHints` is false **or unset** because the server default is
+false, and `:Pico8ToggleInlayHints` is registered even when the helper is
+disabled because it only controls client-side display. Display enablement is
+limited to `pico8` buffers; included `.lua` files are untouched.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

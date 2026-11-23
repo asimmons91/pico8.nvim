@@ -7,6 +7,8 @@ require("pico_lsp").setup({
   cmd = { "pico-lsp" },       -- optional server command override
   lsp = true,                 -- enable vim.lsp.enable("pico_lsp")
   disable = false,            -- disable the helper and LSP setup
+  codelens = true,            -- client-side budget lens display
+  inlay_hints = true,         -- client-side inlay-hint display
   settings = {                -- optional pico8 server settings
     pico8 = { typeChecking = "basic" },
   },
@@ -20,6 +22,8 @@ require("pico_lsp").setup({
 | `cmd` | string, string[], or function | `{ "pico-lsp" }` | Server executable used by the helper and the native client config. |
 | `lsp` | boolean | `true` | Call `vim.lsp.enable("pico_lsp")` during setup. |
 | `disable` | boolean | `false` | Disable the helper and LSP setup. |
+| `codelens` | boolean | `true` | Enable client-side budget lens display for new `pico8` attachments. |
+| `inlay_hints` | boolean | `true` | Enable client-side inlay-hint display for new `pico8` attachments. |
 | `settings` | table | unset | `pico8` settings passed to the client config. |
 
 `vim.g.pico_lsp_cmd` and `PICO_LSP_BIN` are also accepted. A `cmd` string is
@@ -85,7 +89,50 @@ The helper is optional. Opening `.p8` carts works through the native LSP config
 without it; included `.lua` attachment is the helper's job. Disabling the
 helper detaches the `.lua` attachments it created and leaves user-started
 clients alone. `:Pico8Refresh` still exists and reports the disabled state
-without scanning.
+without scanning, and `:Pico8ToggleInlayHints` remains available.
+
+`disable = true` does not turn off the client-side code-lens or inlay-hint
+display supplied by the shipped `lsp/pico_lsp.lua`. Use the separate
+`codelens` and `inlay_hints` options for that.
+
+## Code lens and inlay hints
+
+The shipped config enables both displays for `pico8` buffers:
+
+- the cart budget code lens is returned when `limits.codeLens` is true;
+- inferred local type hints are returned when `inlayHints` is true and
+  `typeChecking` is not `off`.
+
+The server settings are the feature switches. The client options only control
+whether the returned data is displayed. With the default server settings, the
+lens appears and inlay hints stay empty because `pico8.inlayHints` defaults to
+`false`:
+
+```lua
+require("pico_lsp").setup({
+  settings = {
+    pico8 = { inlayHints = true },
+  },
+})
+```
+
+Options apply to clients started afterwards. Restart an existing client with
+`:LspRestart` after changing them. `:Pico8ToggleInlayHints` toggles the display
+for the current buffer without changing server settings; it warns when
+`pico8.inlayHints` is false or unset in the client configuration.
+
+If you use `lsp/pico_lsp.lua` directly without `require("pico_lsp").setup`, the
+defaults still apply. If you replace its `on_attach`, enable the display
+yourself:
+
+```lua
+-- Neovim 0.12+
+vim.lsp.codelens.enable(true, { bufnr = bufnr })
+-- Neovim 0.11
+vim.lsp.codelens.refresh({ bufnr = bufnr })
+
+vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+```
 
 ## Server settings
 
@@ -102,8 +149,8 @@ Common settings:
 |---|---|---|
 | `apiVersion` | `0.2.7` | PICO-8 API version. |
 | `typeChecking` | `basic` | `off`, `basic`, or `strict`. |
-| `inlayHints` | `false` | Show inferred local type hints. |
-| `limits.codeLens` | `true` | Show the cart budget lens. |
+| `inlayHints` | `false` | Return inferred local type hints. Also needs client-side `vim.lsp.inlay_hint.enable`; see [code lens and inlay hints](#code-lens-and-inlay-hints). |
+| `limits.codeLens` | `true` | Return the cart budget lens. |
 | `limits.diagnostics` | `true` | Publish token/character/compressed limit diagnostics. |
 | `format.maxBlankLines` | `2` | Maximum consecutive blank lines. |
 | `diagnostics.mode` | `auto` | `auto`, `push`, or `pull`. |
@@ -150,7 +197,6 @@ The helper reads the merged `vim.lsp.config["pico_lsp"]` value.
 
 The following are proposed and not available yet:
 
-- `codelens`, `inlay_hints` (M27);
 - cached cart info/statusline (M28);
 - `:checkhealth pico_lsp` (M32);
 - `:Pico8InstallParser` (M34).
