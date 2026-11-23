@@ -71,7 +71,8 @@ server settings.
   `require("pico_lsp").setup`; replacing `on_attach` opts out and is documented.
   The shipped hook calls a wildcard `vim.lsp.config("*")` `on_attach`
   explicitly, because a specific config replaces the wildcard value in Neovim.
-  The wildcard callback runs last and can override the display choice.
+  The wildcard callback runs last and can disable inlay hints on both versions
+  and code lens on Neovim 0.12; the 0.11 code-lens engine has no disable state.
 
 ## Scope
 
@@ -142,8 +143,7 @@ require("pico_lsp").setup({
 
 - Options apply to clients started after `setup`.
 - For an already-running client, the options affect the next attach; document
-  that a restart is needed (`:lsp restart` on Neovim 0.12+, or the documented
-  `vim.lsp.enable` cycle on 0.11).
+  that a restart is needed (`:lsp restart` on Neovim 0.12+).
 - The shipped config's `on_attach` reads the current helper options. If
   `setup` was never called, both default to enabled.
 - `disable = true` continues to disable the helper itself. It must not disable
@@ -277,6 +277,13 @@ require("pico_lsp").setup({
 - The manual smoke equivalent is opening `tests/fixtures/smoke.p8`, confirming
   `vim.lsp.codelens.get` reports the budget lens on line 0, and running
   `:Pico8ToggleInlayHints` twice to confirm the per-buffer state flips.
+
+## Known limitations
+
+- Editing an included `.lua` file re-analyzes it on the server, but the client
+  does not automatically redraw the root cart's budget lens or type hints.
+  Change and save the cart buffer, or restart Neovim, to refresh.
+  Server-driven cross-file refresh belongs to M33.
 
 ## Risks
 

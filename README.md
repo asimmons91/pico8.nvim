@@ -146,9 +146,9 @@ Turn the client-side display off for clients started afterwards:
 require("pico_lsp").setup({ codelens = false, inlay_hints = false })
 ```
 
-Restart the client for setup changes to take effect: `:lsp restart` on Neovim
-0.12+, or
-`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")` on 0.11.
+Restart Neovim after changing server `settings`. The client display options are
+read at the next attach, so `:lsp restart` on Neovim 0.12+ is enough for
+`codelens`/`inlay_hints` changes.
 `:Pico8ToggleInlayHints` flips the display for the current buffer and warns when
 `pico8.inlayHints` is false or unset.
 

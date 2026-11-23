@@ -274,6 +274,41 @@ if not vim.lsp.inlay_hint.is_enabled({ bufnr = default_buf }) then
   fail("the second toggle did not re-enable inlay hints")
 end
 
+-- Wildcard on_attach failures are visible, not silently swallowed --------------
+
+local probe = vim.api.nvim_create_buf(false, true)
+vim.bo[probe].filetype = "pico8"
+vim.lsp.config("*", {
+  on_attach = function()
+    error("wildcard probe failure")
+  end,
+})
+notifications = {}
+local original_notify = vim.notify
+vim.notify = function(message, level)
+  notifications[#notifications + 1] = { message = message, level = level }
+end
+local attach_ok, attach_err = pcall(features().attach, nil, probe)
+vim.notify = original_notify
+vim.lsp.config("*", {
+  on_attach = function(_, bufnr)
+    wildcard_attached[bufnr] = true
+  end,
+})
+vim.api.nvim_buf_delete(probe, { force = true })
+if not attach_ok then
+  fail("a wildcard on_attach error escaped attach: " .. tostring(attach_err))
+end
+if #notifications == 0 then
+  fail("a wildcard on_attach error did not notify")
+end
+if not notifications[1].message:find("wildcard on_attach", 1, true) then
+  fail("the wildcard error message is " .. notifications[1].message)
+end
+if notifications[1].level ~= vim.log.levels.ERROR then
+  fail("the wildcard error used level " .. tostring(notifications[1].level))
+end
+
 -- Setup options suppress the client-side display ---------------------------------
 
 require("pico_lsp").setup({ codelens = false, inlay_hints = false })
@@ -281,7 +316,7 @@ require("pico_lsp").setup({ codelens = false, inlay_hints = false })
 -- A buffer that was enabled before the option change must honor the option on
 -- the next attach. Neovim 0.12 keeps a per-buffer capability marker; Neovim
 -- 0.11 keeps a buffer-local save-refresh autocmd.
-features().attach(default_buf)
+attach_features(default_buf)
 if is_012 then
   if vim.lsp.codelens.is_enabled({ bufnr = default_buf }) then
     fail("the next attach did not clear a stale code-lens marker")

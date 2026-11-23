@@ -245,11 +245,16 @@ local function refresh_inlay_hints_after_attach(bufnr)
   end, ATTACH_HINT_RETRY_MS)
 end
 
+local function report_on_attach_error(err)
+  log_debug("pico-lsp: wildcard on_attach failed: " .. tostring(err))
+  notify("wildcard on_attach failed: " .. tostring(err), vim.log.levels.ERROR)
+end
+
 local function run_on_attach(callback, client, bufnr)
   if type(callback) == "function" then
     local ok, err = pcall(callback, client, bufnr)
     if not ok then
-      log_debug("pico-lsp: wildcard on_attach failed: " .. tostring(err))
+      report_on_attach_error(err)
     end
     return
   end
@@ -260,7 +265,7 @@ local function run_on_attach(callback, client, bufnr)
     if type(entry) == "function" then
       local ok, err = pcall(entry, client, bufnr)
       if not ok then
-        log_debug("pico-lsp: wildcard on_attach failed: " .. tostring(err))
+        report_on_attach_error(err)
       end
     end
   end

@@ -116,9 +116,9 @@ require("pico_lsp").setup({
 })
 ```
 
-Options apply to clients started afterwards. Restart the client after changing
-them: `:lsp restart` on Neovim 0.12+, or
-`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")` on 0.11.
+Options apply to clients started afterwards. `:lsp restart` on Neovim 0.12+ is
+enough for `codelens`/`inlay_hints` changes. Server `settings` changes require
+re-resolving the client config, so restart Neovim.
 `:Pico8ToggleInlayHints` toggles the display for the current buffer without
 changing server settings; it warns when `pico8.inlayHints` is false or unset in
 the client configuration.
@@ -138,8 +138,10 @@ vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 
 The shipped `on_attach` also runs a wildcard
 `vim.lsp.config("*", { on_attach = ... })` callback. A specific config replaces
-the wildcard value in Neovim, so the plugin calls it explicitly and after its
-own enablement; a wildcard callback can therefore override the display choice.
+the wildcard value in Neovim, so the plugin calls it explicitly after its own
+enablement. The wildcard callback can disable inlay hints on both versions and
+code lens on Neovim 0.12; Neovim 0.11's legacy code-lens engine has no disable
+state, and its save hook restores the lens.
 
 The shipped `on_attach` runs after `LspAttach` autocmds. To turn the display off,
 use the `codelens`/`inlay_hints` options or a wildcard `on_attach` callback

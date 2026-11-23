@@ -64,10 +64,17 @@ above.
   configuration.
 - The budget lens also requires `pico8.limits.codeLens = true` and a root cart
   with available counts.
-- Client-side options apply to clients started after `setup`. Restart the
-  client with `:lsp restart` on Neovim 0.12+, or with
-  `:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")` on 0.11.
+- Client-side options apply to clients started after `setup`. Restart Neovim
+  after changing server settings; `:lsp restart` on Neovim 0.12+ is enough for
+  the `codelens`/`inlay_hints` options.
 - Inspect the client log if the requests fail.
+
+## Cart lens or hints are stale after editing an include
+
+- Editing an included `.lua` file re-analyzes it on the server, but the client
+  does not automatically redraw the root cart's lens or hints. Change and save
+  the cart buffer, or restart Neovim, to refresh.
+- Server-driven cross-file refresh belongs to M33.
 
 ## PNG cart fails
 

@@ -238,8 +238,8 @@ require("pico_lsp").setup({
 })
 ```
 
-`:lsp restart` after changing setup options on Neovim 0.12+; on 0.11 use
-`:lua vim.lsp.enable("pico_lsp", false); vim.lsp.enable("pico_lsp")`.
+Restart Neovim after changing server settings. The client display options apply
+at the next attach; `:lsp restart` on Neovim 0.12+ is enough for those.
 `:Pico8ToggleInlayHints` toggles the display for the current buffer without
 changing server settings; it warns when `pico8.inlayHints` is false or unset.
 
