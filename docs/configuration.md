@@ -82,7 +82,10 @@ vim.g.pico_lsp_helper_disabled = 1
 ```
 
 The helper is optional. Opening `.p8` carts works through the native LSP config
-without it; included `.lua` attachment is the helper's job.
+without it; included `.lua` attachment is the helper's job. Disabling the
+helper detaches the `.lua` attachments it created and leaves user-started
+clients alone. `:Pico8Refresh` still exists and reports the disabled state
+without scanning.
 
 ## Server settings
 

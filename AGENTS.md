@@ -10,8 +10,15 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25 is complete; M26–M32 and M34 are proposed. M33 remains server-owned in
-  `pico-lsp`. M35 (Mason and LazyVim extra) is proposed.
+- M25 and M26 are complete. M27–M32 and M34 are proposed. M33 remains
+  server-owned in `pico-lsp`. M35 (Mason and LazyVim extra) is proposed.
+- The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
+  parsed includes by changedtick or mtime/size, reuses only root-matched
+  clients, tracks helper-managed attachments, revalidates ownership, and
+  rescans cart saves/reloads plus cart edits after a 300 ms debounce.
+  `:Pico8Refresh` clears the cache and rescans; it is registered even when the
+  helper is disabled. A re-`setup()` while the client is already enabled, and a
+  plugin module reload, preserve managed attachments.
 - `pico-lsp` remains the source of truth for the server, parser, analysis,
   formatter, diagnostics, and standard LSP capabilities. Do not add server code
   here.
@@ -31,8 +38,9 @@
 
 ## Commands
 
-- `PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh` runs the headless Neovim smoke
-  test. The binary must be installed; the test does not build the Go server.
+- `PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh` runs the headless Neovim tests
+  (config, helper smoke, M26 correctness, and fallback). The binary must be
+  installed; the test does not build the Go server.
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
 - `:helptags doc` regenerates the help tags when manually testing.

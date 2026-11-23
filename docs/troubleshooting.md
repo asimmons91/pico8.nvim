@@ -28,13 +28,23 @@ above.
 
 - Confirm the include is a line beginning with `#include`.
 - Confirm the path resolves relative to the cart directory.
-- Confirm the cart has been saved since the include was added. The helper reads
-  the cart from disk; buffer-aware discovery of unsaved edits is proposed in
-  M26.
+- Unsaved includes work: the helper reads a loaded cart buffer instead of the
+  file on disk. An unloaded cart is read from disk.
+- If an external tool changed a cart while Neovim has the old buffer loaded,
+  reload it with `:edit!` so Neovim reads the new contents. The helper rescans
+  on reload. `:Pico8Refresh` clears cached include data and rescans loaded
+  `.lua` buffers, but it does not reload a cart buffer.
+- If the cart is not loaded and changed outside Neovim, run `:Pico8Refresh`.
 - Check that `lua_ls` and `pico_lsp` are not both attached to the same buffer.
 - The helper ignores unrelated `.lua` files by design.
 
-`Pico8Refresh` and the buffer-aware include cache are proposed in M26.
+## An include stays attached after removal
+
+- Wait for the debounce (300 ms) after an unsaved cart edit, or save the cart.
+- If the cart changed outside Neovim, reload it with `:edit!`; the helper
+  rescans on reload. If the cart is not loaded, run `:Pico8Refresh`.
+- The helper only detaches clients it recorded as helper-managed. A `pico_lsp`
+  client you started yourself remains attached until you stop it.
 
 ## Lens or hints are missing
 

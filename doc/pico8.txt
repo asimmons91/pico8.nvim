@@ -14,8 +14,14 @@ on its own; it is loaded from `lsp/pico_lsp.lua` on 'runtimepath'.
 
 `.p8` buffers use the cart's directory as the workspace root, even outside a
 git repository. Carts in different directories use separate clients. Override
-`root_dir` with `vim.lsp.config("pico_lsp", { ... })` before opening a cart for
-repository-wide symbols.
+`root_dir` with `vim.lsp.config("pico_lsp", { ... })` before opening a cart
+for repository-wide symbols.
+
+A loaded cart buffer is the helper's include source. Reload an open cart with
+`:edit!` after an external change; the helper rescans on reload.
+`:Pico8Refresh` clears cached include data and rescans loaded `.lua` buffers;
+it does not reload a cart buffer. The helper only detaches attachments it
+created; a client started by the user is left alone.
 
 Options:
     `cmd`           server command (string, list, or function)
@@ -35,9 +41,10 @@ COMMANDS                                                   *pico8-commands*
 :Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer.
 :Pico8ReloadPng          Reload the current decoded PNG cart.
 :Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
+:Pico8Refresh            Clear the include cache and rescan loaded buffers.
 
-Proposed commands: `:Pico8Refresh`, `:Pico8CartInfo`, `:Pico8Tabs`,
-`:Pico8OpenCart`, and `:Pico8InstallParser`.
+Proposed commands: `:Pico8CartInfo`, `:Pico8Tabs`, `:Pico8OpenCart`, and
+`:Pico8InstallParser`.
 
 ==============================================================================
 VARIABLES                                                 *pico8-variables*

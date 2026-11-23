@@ -1,10 +1,12 @@
 # M26 — Neovim Helper Correctness and Performance
 
-**Status:** Proposed — not started.
+**Status:** Done — buffer-aware include discovery, include caching, root-matched
+client reuse, managed detach, save/reload and debounced edit rescans,
+`:Pico8Refresh`, setup re-entry, tests, and documentation are complete.
 
 **Depends on:** pico-lsp M6 (server features), M25 (drop-in config and cart-aware roots)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -35,11 +37,25 @@ the helper never attaches the first cart's client to the second cart's include.
 | D3 | Client reuse | Reuse an existing `pico_lsp` client only when its normalized root matches the target cart directory. Otherwise start a client for that root. |
 | D4 | Ownership | Store helper-managed attachments in a buffer map containing the client ID, root, and owning cart. Explicitly attaching an existing client creates a managed record. Never detach a client that is not recorded as managed for that buffer. |
 | D5 | Revalidation | On cart save and debounced cart edits, recompute ownership for loaded managed `.lua` buffers. Detach when the owning cart disappears or changes root, then attach the new owner if one exists. |
-| D6 | Rescan triggers | `BufWritePost` for carts, debounced `TextChanged`/`TextChangedI` for loaded carts, `BufEnter`/`FileType` for Lua buffers, and an explicit `:Pico8Refresh`. |
+| D6 | Rescan triggers | `BufWritePost` and `BufReadPost` for carts, `BufUnload`/`BufWipeout` cache invalidation and revalidation, debounced `TextChanged`/`TextChangedI` for loaded carts, `BufEnter`/`FileType` for Lua buffers, and an explicit `:Pico8Refresh`. |
 | D7 | Debounce | Coalesce cart-edit rescans for 250–500 ms. A rescan must not run synchronously on every keystroke. |
 | D8 | Missing binary | Keep one warning per session. Do not emit a warning for every `.lua` buffer that cannot attach. |
 | D9 | CI | Extend the headless Neovim job from M25 with the correctness cases in this milestone. |
 | D10 | Scope | No user-facing commands beyond `:Pico8Refresh`; no change to include semantics or server ownership rules. |
+
+### Resolved decisions
+
+- **D7:** the debounce is 300 ms.
+- **D2/D6:** `:Pico8Refresh` is registered even when the helper is disabled and
+  reports that state without scanning. A loaded cart buffer remains
+  authoritative, so an external change to a loaded cart requires reloading it
+  (`:edit!`); `BufReadPost` rescans the new contents, and `BufUnload` drops
+  cached data and revalidates.
+- **D4:** a buffer that already has a user-started `pico_lsp` client is left
+  untouched; the helper never adds a second client or claims that attachment.
+- **D4/D5:** a re-`setup()` while `pico_lsp` is already enabled preserves
+  managed records without re-running the native enable sweep; disabling the
+  helper detaches the records it owns and only those.
 
 ## Scope
 
@@ -68,10 +84,11 @@ the helper never attaches the first cart's client to the second cart's include.
 
 1. `lua/pico_lsp/init.lua` — buffer-aware include discovery,
    cache, root matching, and managed detach.
-2. `tests/helper.lua` — extended headless cases.
-3. `.github/workflows/ci.yml` — Neovim test coverage from M25 extended with
-   these cases.
-4. `README.md` and `docs/troubleshooting.md` — behavior and
+2. `tests/correctness.lua` and `tests/run.sh` — focused headless cases for the
+   helper correctness work.
+3. `.github/workflows/ci.yml` — the existing Neovim job runs the extended
+   `tests/run.sh` coverage; no workflow edit is required for these cases.
+4. `README.md`, `docs/usage.md`, and `docs/troubleshooting.md` — behavior and
    recovery guidance.
 5. `docs/ROADMAP.md` — milestone status.
 
@@ -155,13 +172,17 @@ the helper never attaches the first cart's client to the second cart's include.
 ### 6. Rescan triggers and debounce
 
 - Keep the existing `BufWritePost` cart rescan.
+- Rescan when a cart is reloaded (`BufReadPost`) so `:edit!` sees external
+  include changes, and revalidate after a cart is unloaded (`BufUnload`) or
+  wiped (`BufWipeout`).
 - Add a debounced cart-edit rescan so a new or removed `#include` takes effect
   without saving.
 - Use one timer or generation counter per cart; a new edit restarts the
   debounce.
 - Do not rescan during `TextChangedI` on every character without debouncing.
 - Add `:Pico8Refresh` with no arguments. It clears the include cache, rescans
-  loaded `.lua` buffers, and prints a short confirmation.
+  loaded `.lua` buffers, and prints a short confirmation. It reads loaded cart
+  buffers, so it does not apply external disk changes to an open cart.
 - Make `:Pico8Refresh` safe when the helper is disabled or no carts are open.
 
 ### 7. Error handling and logging
@@ -177,7 +198,10 @@ the helper never attaches the first cart's client to the second cart's include.
 ### 8. Documentation
 
 - Explain that unsaved include edits are visible to the helper.
-- Document `:Pico8Refresh` for cases where an external tool changed a cart.
+- Document that a loaded cart buffer is authoritative. After an external change
+  to an open cart, reload it with `:edit!`; the helper rescans on reload.
+  `:Pico8Refresh` does not reload cart buffers.
+- Document `:Pico8Refresh` for carts that are not loaded.
 - Document that the helper only detaches clients it manages.
 - Add a troubleshooting entry for a stale include attachment and the refresh
   command.
@@ -187,7 +211,10 @@ the helper never attaches the first cart's client to the second cart's include.
 
 - `require("pico_lsp").setup(opts)` keeps its existing options.
 - New command: `:Pico8Refresh`.
-- Module-local cache and managed-attachment state; no new global variables.
+- Module-local cache and managed-attachment state; helper-managed attachments
+  carry a private per-buffer marker on the client so a module reload can
+  re-adopt them without claiming a user-started attachment on another buffer;
+  no new global variables.
 - No new LSP request, response, server command, or setting.
 - `vim.b.pico8_cart` and comment settings are added by M29, not this milestone.
 
@@ -205,21 +232,44 @@ the helper never attaches the first cart's client to the second cart's include.
 
 ## Testing and CI
 
-- Extend `tests/helper.lua` or add a focused test file that:
-  - opens a cart and appends an unsaved `#include`, then opens the target and
-    asserts attachment;
-  - modifies a loaded cart's include list without saving and asserts the target
-    attaches or detaches after the debounce;
-  - opens two carts with the same include basename in sibling directories and
-    asserts each buffer uses the matching root;
-  - removes an include and asserts the managed client detaches;
-  - starts a `pico_lsp` client directly on an included `.lua` buffer, removes
-    the include, and asserts the user-started client remains attached;
-  - enters and leaves the same `.lua` buffer repeatedly and asserts one client
-    per root;
-  - calls `:Pico8Refresh` and asserts no duplicate clients;
-  - verifies an unrelated `.lua` file still does not attach;
-  - verifies a `.lua:2` include path is treated literally, matching the
+- `tests/correctness.lua`, run by `tests/run.sh`, covers:
+  - opening a cart and appending an unsaved `#include`, then opening the target
+    and asserting attachment;
+  - modifying a loaded cart's include list without saving and asserting the
+    target attaches or detaches after the debounce;
+  - opening two carts with the same include basename in sibling directories and
+    asserting each buffer uses the matching root;
+  - moving ownership between a parent cart and a nearer cart root;
+  - removing one include while keeping another managed buffer and the cart's
+    own client attached;
+  - saving a cart and asserting a removed include detaches and an added include
+    reattaches;
+  - reloading a cart with `:edit!` and asserting external include changes take
+    effect immediately;
+  - unloading or wiping a cart and asserting its includes are revalidated
+    against disk;
+  - externally changing a cart that is not loaded and asserting the disk include
+    cache notices the change, including a same-size include swap;
+  - asserting a loaded cart buffer stays authoritative for `:Pico8Refresh` when
+    disk disagrees;
+  - renaming a managed `.lua` buffer and asserting the helper client detaches;
+  - re-running setup while `pico_lsp` is already enabled and asserting managed
+    attachments and user-started clients survive;
+  - simulating a plugin module reload and asserting marked helper clients are
+    re-adopted while user-started clients remain;
+  - disabling the helper and asserting managed attachments detach while a
+    user-started client remains;
+  - invoking disabled commands and asserting they do not start clients or edit
+    buffers;
+  - removing an include and asserting the managed client detaches;
+  - starting a `pico_lsp` client directly on an included `.lua` buffer,
+    removing the include, and asserting the user-started client remains
+    attached even after `:Pico8Refresh`;
+  - entering and leaving the same `.lua` buffer repeatedly and asserting one
+    client per root;
+  - calling `:Pico8Refresh` and asserting no duplicate clients;
+  - verifying an unrelated `.lua` file still does not attach;
+  - verifying a `.lua:2` include path is treated literally, matching the
     server, and does not attach a `lib.lua` buffer.
 - Tests must wait on conditions with a bounded `vim.wait`, not fixed sleeps.
 - Run the suite on Neovim 0.11 and 0.12 in CI.
@@ -227,15 +277,23 @@ the helper never attaches the first cart's client to the second cart's include.
 
 ## Exit criteria
 
-- [ ] An unsaved `#include` attaches the included `.lua` buffer.
-- [ ] Editing or removing an include updates managed attachments after the
+- [x] An unsaved `#include` attaches the included `.lua` buffer.
+- [x] Editing or removing an include updates managed attachments after the
       debounce.
-- [ ] Clients are reused only for the matching cart root.
-- [ ] Multiple carts in sibling directories do not cross-attach.
-- [ ] Repeated buffer entry does not create duplicate clients.
-- [ ] The helper never detaches a client it did not manage.
-- [ ] `:Pico8Refresh` rescans safely and is idempotent.
-- [ ] Headless Neovim tests cover the cases above and run in CI.
+- [x] Saving or reloading a cart applies its new include list immediately, and
+      unloading or wiping it revalidates against disk.
+- [x] Renaming a managed `.lua` buffer detaches its helper-owned client.
+- [x] Re-running setup while `pico_lsp` is already enabled preserves managed
+      attachments and user-started clients, and disabling the helper detaches
+      only its managed attachments.
+- [x] A plugin module reload re-adopts helper-managed clients without claiming
+      user-started clients.
+- [x] Clients are reused only for the matching cart root.
+- [x] Multiple carts in sibling directories do not cross-attach.
+- [x] Repeated buffer entry does not create duplicate clients.
+- [x] The helper never detaches a client it did not manage.
+- [x] `:Pico8Refresh` rescans safely and is idempotent.
+- [x] Headless Neovim tests cover the cases above and run in CI.
 
 ## Risks
 
