@@ -48,13 +48,33 @@ above.
 
 ## Lens or hints are missing
 
-- The budget lens requires the server to return a lens and the client to display
-  it.
-- On Neovim 0.11, the legacy code-lens engine uses `vim.lsp.codelens.refresh`;
-  on 0.12, the client uses `vim.lsp.codelens.enable`.
-- Inlay hints require both `pico8.inlayHints = true` and client-side
-  `vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })`.
-- The exact enablement and toggle command are proposed in M27.
+- Confirm a `pico_lsp` client is attached: `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
+- The shipped config enables the client-side display for `pico8` buffers. If
+  you replaced its `on_attach`, enable the display yourself; see
+  [configuration](configuration.md#code-lens-and-inlay-hints).
+- Check the client-side state. On Neovim 0.12:
+  `:lua =vim.lsp.codelens.is_enabled({ bufnr = 0 })` and
+  `:lua =vim.lsp.inlay_hint.is_enabled({ bufnr = 0 })`. On Neovim 0.11, use
+  `:lua =vim.lsp.codelens.get(0)` and the same inlay-hint call.
+- For hints, enable `pico8.inlayHints` in `settings` and keep `typeChecking`
+  other than `off`. The server default is off; see
+  [configuration](configuration.md#code-lens-and-inlay-hints).
+- `:Pico8ToggleInlayHints` toggles the client display for the current buffer.
+  It warns when the setting is false or absent and does not change server
+  configuration.
+- The budget lens also requires `pico8.limits.codeLens = true` and a root cart
+  with available counts.
+- Client-side options apply to clients started after `setup`. Restart Neovim
+  after changing server settings; `:lsp restart` on Neovim 0.12+ is enough for
+  the `codelens`/`inlay_hints` options.
+- Inspect the client log if the requests fail.
+
+## Cart lens or hints are stale after editing an include
+
+- Editing an included `.lua` file re-analyzes it on the server, but the client
+  does not automatically redraw the root cart's lens or hints. Change and save
+  the cart buffer, or restart Neovim, to refresh.
+- Server-driven cross-file refresh belongs to M33.
 
 ## PNG cart fails
 

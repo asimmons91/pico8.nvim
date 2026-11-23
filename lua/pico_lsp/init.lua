@@ -311,6 +311,13 @@ local function is_virtual(bufnr, name)
   return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
+local function enable_client_features(lsp_client, bufnr)
+  local ok, client = pcall(require, "pico_lsp.client")
+  if ok and client and type(client.attach) == "function" then
+    pcall(client.attach, lsp_client, bufnr)
+  end
+end
+
 -- Minimal config for helper-only installs without `lsp/pico_lsp.lua`. It also
 -- gives manual `vim.lsp.enable("pico_lsp")` a complete config instead of a
 -- partial one that would attach a rootless client.
@@ -324,6 +331,9 @@ local function fallback_config()
         return
       end
       on_dir(vim.fs.dirname(vim.fs.normalize(name)))
+    end,
+    on_attach = function(lsp_client, bufnr)
+      enable_client_features(lsp_client, bufnr)
     end,
   }
 end
@@ -1008,6 +1018,11 @@ local function define_commands(enabled)
   vim.api.nvim_create_user_command("Pico8Refresh", function()
     M.refresh()
   end, { nargs = 0, desc = "Clear the pico-lsp include cache and rescan loaded buffers" })
+  -- The toggle only changes client-side display, not helper-owned attachments,
+  -- so it stays available when the helper itself is disabled.
+  vim.api.nvim_create_user_command("Pico8ToggleInlayHints", function()
+    require("pico_lsp.client").toggle_inlay_hints(0)
+  end, { nargs = 0, desc = "Toggle pico-lsp inlay hints for the current buffer" })
   if not enabled then
     return
   end
@@ -1024,6 +1039,13 @@ function M.setup(opts)
   opts = opts or {}
   M.opts = opts
   M.disabled = opts.disable == true or vim.g.pico_lsp_helper_disabled == 1
+
+  -- Configure the shared client-display options even when the helper is
+  -- disabled: the shipped lsp/pico_lsp.lua still attaches and reads them.
+  local ok, client = pcall(require, "pico_lsp.client")
+  if ok and client and type(client.setup) == "function" then
+    client.setup(opts)
+  end
 
   cancel_rescans()
   include_cache = {}

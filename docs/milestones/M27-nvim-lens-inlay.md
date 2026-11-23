@@ -1,10 +1,12 @@
 # M27 — Neovim Code Lens and Inlay Hint Enablement
 
-**Status:** Proposed — not started.
+**Status:** Done — shipped `on_attach` enablement, per-buffer display, setup
+options, `:Pico8ToggleInlayHints`, Neovim 0.11/0.12 compatibility, tests, and
+documentation are complete.
 
 **Depends on:** M25 (drop-in configuration), M26 (helper correctness)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -40,6 +42,37 @@ server settings.
 | D8 | Server changes | None. The server already advertises both capabilities and honors its settings. |
 | D9 | Non-helper users | Users who replace the shipped config's `on_attach` are responsible for enabling the features; document the one-line calls. |
 | D10 | Tests | Extend the headless Neovim suite to assert client capability state and server responses. |
+
+### Resolved decisions
+
+- **D7:** the toggle warns when `pico8.inlayHints` is explicit `false` **or
+  unset**. `pico-lsp` defaults the setting to `false`, so an absent client value
+  has the same visible result. The warning points at
+  `docs/configuration.md` and does not change server configuration.
+- **D4:** `:Pico8ToggleInlayHints` is registered even when the helper is
+  disabled because it only controls client-side display. `:Pico8Refresh` keeps
+  the M26 behavior.
+- **D5:** enablement uses feature detection: `vim.lsp.codelens.enable` when
+  present, otherwise `vim.lsp.codelens.refresh`. All calls are wrapped in
+  `pcall`; a missing API only writes a debug log.
+- **D6:** Neovim 0.11 gets one buffer-local `BufWritePost` refresh per cart.
+  Neovim 0.12 relies on its automatic refresh. The refresh is skipped when no
+  `pico_lsp` client is attached. The attach-time inlay request can race the
+  server's `didOpen` analysis, so the client retries the hint refresh twice
+  after attach and stops as soon as hints are visible.
+- **D4/D5:** a re-attach reconciles the current options with persisted display
+  state: Neovim 0.12 code-lens enablement is explicitly disabled when the
+  option is off, and the Neovim 0.11 save-refresh autocmd is removed. The same
+  attach path disables inlay hints when `inlay_hints = false`.
+- **D3:** enablement is limited to buffers whose filetype is `pico8`. Included
+  `.lua` buffers and other clients are untouched.
+- **D9:** the shipped `lsp/pico_lsp.lua` `on_attach` reads the current helper
+  options. Base-config users get the defaults without calling
+  `require("pico_lsp").setup`; replacing `on_attach` opts out and is documented.
+  The shipped hook calls a wildcard `vim.lsp.config("*")` `on_attach`
+  explicitly, because a specific config replaces the wildcard value in Neovim.
+  The wildcard callback runs last and can disable inlay hints on both versions
+  and code lens on Neovim 0.12; the 0.11 code-lens engine has no disable state.
 
 ## Scope
 
@@ -110,7 +143,7 @@ require("pico_lsp").setup({
 
 - Options apply to clients started after `setup`.
 - For an already-running client, the options affect the next attach; document
-  that a restart or `:LspRestart` is needed.
+  that a restart is needed (`:lsp restart` on Neovim 0.12+).
 - The shipped config's `on_attach` reads the current helper options. If
   `setup` was never called, both default to enabled.
 - `disable = true` continues to disable the helper itself. It must not disable
@@ -219,16 +252,38 @@ require("pico_lsp").setup({
 
 ## Exit criteria
 
-- [ ] The budget lens is visible in a stock Neovim session with the shipped
+- [x] The budget lens is visible in a stock Neovim session with the shipped
       config.
-- [ ] Inlay hints appear when `pico8.inlayHints = true` without additional
+- [x] Inlay hints appear when `pico8.inlayHints = true` without additional
       user setup.
-- [ ] `codelens` and `inlay_hints` setup options disable the client-side
+- [x] `codelens` and `inlay_hints` setup options disable the client-side
       display.
-- [ ] `:Pico8ToggleInlayHints` works and warns when the server setting is off.
-- [ ] Base-config users without `require("pico_lsp").setup` get the defaults.
-- [ ] Non-PICO-8 buffers and other clients are unaffected.
-- [ ] Headless tests cover capability state and server responses in CI.
+- [x] `:Pico8ToggleInlayHints` works and warns when the server setting is off.
+- [x] Base-config users without `require("pico_lsp").setup` get the defaults.
+- [x] Non-PICO-8 buffers and other clients are unaffected.
+- [x] Headless tests cover capability state and server responses in CI.
+
+## Verification
+
+- `tests/features.lua`, run by `tests/run.sh`, covers the shipped config
+  without setup, helper defaults, `codelens`/`inlay_hints` options separately,
+  option changes on re-attach, the toggle and its warning, direct
+  `textDocument/codeLens` and `textDocument/inlayHint` responses, visible
+  inlay hints after attach without an edit, non-PICO-8 buffers, PNG buffers,
+  the no-client toggle path, the disabled-helper command, and wildcard
+  `vim.lsp.config("*")` on_attach preservation. It passed on Neovim 0.11.4 and
+  0.12.6 against a pico-lsp development build.
+- `tests/fallback.lua` also asserts the fallback config enables the display.
+- The manual smoke equivalent is opening `tests/fixtures/smoke.p8`, confirming
+  `vim.lsp.codelens.get` reports the budget lens on line 0, and running
+  `:Pico8ToggleInlayHints` twice to confirm the per-buffer state flips.
+
+## Known limitations
+
+- Editing an included `.lua` file re-analyzes it on the server, but the client
+  does not automatically redraw the root cart's budget lens or type hints.
+  Change and save the cart buffer, or restart Neovim, to refresh.
+  Server-driven cross-file refresh belongs to M33.
 
 ## Risks
 

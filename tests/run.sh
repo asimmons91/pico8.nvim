@@ -31,6 +31,11 @@ PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
     --cmd "set runtimepath+=$root" \
     -l "$root/tests/correctness.lua"
 
+PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
+  nvim --headless --clean -u NONE \
+    --cmd "set runtimepath+=$root" \
+    -l "$root/tests/features.lua"
+
 fallback_rtp="$(mktemp -d)"
 trap 'rm -rf "$fallback_rtp"' EXIT
 ln -s "$root/lua" "$fallback_rtp/lua"
