@@ -80,10 +80,16 @@ local function get_config()
   local fetched, config = pcall(function()
     return vim.lsp.config["pico_lsp"]
   end)
-  if fetched and type(config) == "table" then
-    return config
+  if not fetched then
+    return nil, tostring(config)
   end
-  return nil
+  if type(config) == "table" then
+    return config, nil
+  end
+  if config == nil then
+    return nil, nil
+  end
+  return nil, "vim.lsp.config['pico_lsp'] resolved to " .. type(config)
 end
 
 local function safe_len(value)
@@ -318,13 +324,41 @@ local function is_health_buffer(bufnr)
 end
 
 -- :checkhealth opens its own buffer before running this module, so the current
--- buffer is not the one the user was editing. Prefer the previous tab's active
--- window, then the alternate buffer, to report the cart the user actually had
--- open.
+-- buffer is not the one the user was editing. Prefer a normal window in the
+-- current tab, then the previous tab's active window, then the alternate
+-- buffer, to report the cart the user actually had open.
 local function context_bufnr()
   local current = vim.api.nvim_get_current_buf()
   if not is_health_buffer(current) then
     return current
+  end
+
+  -- `g:health.style = 'float'` keeps the user's tab active and puts the report
+  -- in a floating window. Prefer a normal window in this tab before looking at
+  -- a different tab.
+  local current_win = vim.api.nvim_get_current_win()
+  local current_config = vim.api.nvim_win_get_config(current_win)
+  if current_config.relative ~= "" then
+    local alternate_win = vim.fn.win_getid(vim.fn.winnr("#"))
+    if
+      alternate_win ~= 0
+      and alternate_win ~= current_win
+      and vim.api.nvim_win_is_valid(alternate_win)
+      and vim.api.nvim_win_get_config(alternate_win).relative == ""
+    then
+      local bufnr = vim.api.nvim_win_get_buf(alternate_win)
+      if not is_health_buffer(bufnr) then
+        return bufnr
+      end
+    end
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if win ~= current_win and vim.api.nvim_win_get_config(win).relative == "" then
+        local bufnr = vim.api.nvim_win_get_buf(win)
+        if not is_health_buffer(bufnr) then
+          return bufnr
+        end
+      end
+    end
   end
 
   local previous = vim.fn.tabpagenr("#")
@@ -410,9 +444,17 @@ local function check_neovim()
   end
 end
 
-local function check_configuration(config, cmd)
+local function check_configuration(config, config_error, cmd)
   if config then
     ok("vim.lsp.config['pico_lsp'] is available")
+  elseif config_error then
+    error(
+      "vim.lsp.config['pico_lsp'] could not be resolved: " .. compact(config_error),
+      {
+        "Check lsp/pico_lsp.lua for errors and confirm the plugin is on 'runtimepath'.",
+        "runtimepath: " .. vim.o.runtimepath,
+      }
+    )
   else
     warn(
       "vim.lsp.config['pico_lsp'] is missing; the shipped lsp/pico_lsp.lua is not on 'runtimepath'",
@@ -832,8 +874,10 @@ local function check_includes()
   local found = false
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
-      local cart_uri = vim.b[bufnr].pico8_cart
-      if type(cart_uri) == "string" and cart_uri ~= "" then
+      local read, cart_uri = pcall(function()
+        return vim.b[bufnr].pico8_cart
+      end)
+      if read and type(cart_uri) == "string" and cart_uri ~= "" then
         found = true
         local reported, err = pcall(report_include, bufnr, cart_uri)
         if not reported then
@@ -986,12 +1030,12 @@ function M.check()
 
   vim.health.start("pico_lsp")
 
-  local config = get_config()
+  local config, config_error = get_config()
   local cmd = config and config.cmd or fallback_command()
 
   run_section("Neovim", check_neovim)
   run_section("Configuration", function()
-    check_configuration(config, cmd)
+    check_configuration(config, config_error, cmd)
   end)
   run_section("Server binary", function()
     check_server_binary(cmd)

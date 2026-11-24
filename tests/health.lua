@@ -218,6 +218,19 @@ assert_section(text, "Helper", "setup() has not run", "setup state is missing")
 assert_not_contains(section(text, "Helper"), "helper commands are missing", "no-helper run warned about commands")
 assert_section(text, "Tree-sitter", "pico8 filetype detection is registered", "filetype detection is missing")
 
+-- Config resolution failures are errors ----------------------------------------
+
+local real_lsp_config = vim.lsp.config
+vim.lsp.config = setmetatable({}, {
+  __index = function()
+    error("simulated config failure")
+  end,
+})
+text = capture_health()
+assert_section(text, "Configuration", "❌ ERROR", "config resolution failure was not an error")
+assert_section(text, "Configuration", "could not be resolved", "config resolution failure text is missing")
+vim.lsp.config = real_lsp_config
+
 -- A real cart and managed include --------------------------------------------
 
 local project = tmp .. "/project"
