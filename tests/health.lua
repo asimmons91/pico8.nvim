@@ -704,6 +704,25 @@ assert_not_contains(
   "no pico8 cart is active",
   "float report used the focused floating window"
 )
+
+local standard_float_text = capture_health()
+assert_section(
+  standard_float_text,
+  "Running clients",
+  "current buffer attached: yes",
+  "standard report from a float lost the current cart"
+)
+assert_section(
+  standard_float_text,
+  "Client features",
+  "pico8.inlayHints = true",
+  "standard report from a float lost the cart features"
+)
+assert_not_contains(
+  section(standard_float_text, "Client features"),
+  "no pico8 cart is active",
+  "standard report used the previous tab's floating window"
+)
 pcall(vim.api.nvim_win_close, float_win, true)
 pcall(vim.api.nvim_buf_delete, float_buf, { force = true })
 

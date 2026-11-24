@@ -398,6 +398,60 @@ local function is_health_buffer(bufnr)
   return vim.bo[bufnr].filetype == "checkhealth"
 end
 
+-- A usable context window is a non-health window that is either normal or shows
+-- a pico8 buffer. This skips a focused floating terminal/help window while
+-- still allowing a pico8 buffer displayed in a float.
+local function usable_context_buffer(win, excluded_win)
+  if win == excluded_win or not vim.api.nvim_win_is_valid(win) then
+    return nil
+  end
+  local bufnr = vim.api.nvim_win_get_buf(win)
+  if is_health_buffer(bufnr) then
+    return nil
+  end
+  if vim.api.nvim_win_get_config(win).relative ~= "" and not is_pico8_buffer(bufnr) then
+    return nil
+  end
+  return bufnr
+end
+
+local function usable_context_buffer_in_tab(tab, excluded_win)
+  local win = vim.api.nvim_tabpage_get_win(tab)
+  local bufnr = usable_context_buffer(win, excluded_win)
+  if bufnr then
+    return bufnr
+  end
+
+  local candidates = {}
+  for _, candidate_win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    local candidate = usable_context_buffer(candidate_win, excluded_win)
+    if candidate then
+      candidates[#candidates + 1] = candidate
+    end
+  end
+  for _, candidate in ipairs(candidates) do
+    if is_pico8_buffer(candidate) then
+      return candidate
+    end
+  end
+  return candidates[1]
+end
+
+local function only_floating_windows(bufnr)
+  local found = false
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      if vim.api.nvim_win_get_buf(win) == bufnr then
+        found = true
+        if vim.api.nvim_win_get_config(win).relative == "" then
+          return false
+        end
+      end
+    end
+  end
+  return found
+end
+
 -- :checkhealth opens its own buffer before running this module, so the current
 -- buffer is not the one the user was editing. A split or `g:health.style =
 -- 'float'` report shares the user's tab; a plain report opens a new tab. Prefer
@@ -411,28 +465,11 @@ local function context_bufnr()
 
   local current_win = vim.api.nvim_get_current_win()
 
-  -- A window is usable when it is not the health window and is either a normal
-  -- window or shows a pico8 buffer. This skips a focused floating terminal or
-  -- help window while still allowing a pico8 buffer displayed in a float.
-  local function usable_buffer(win)
-    if win == current_win or not vim.api.nvim_win_is_valid(win) then
-      return nil
-    end
-    local bufnr = vim.api.nvim_win_get_buf(win)
-    if is_health_buffer(bufnr) then
-      return nil
-    end
-    if vim.api.nvim_win_get_config(win).relative ~= "" and not is_pico8_buffer(bufnr) then
-      return nil
-    end
-    return bufnr
-  end
-
   -- The alternate window is where the user came from unless another float
   -- stole focus.
   local alternate_win = vim.fn.win_getid(vim.fn.winnr("#"))
   if alternate_win ~= 0 then
-    local bufnr = usable_buffer(alternate_win)
+    local bufnr = usable_context_buffer(alternate_win, current_win)
     if bufnr then
       return bufnr
     end
@@ -442,7 +479,7 @@ local function context_bufnr()
   -- terminal does not hide the cart behind it, then any usable window.
   local candidates = {}
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local bufnr = usable_buffer(win)
+    local bufnr = usable_context_buffer(win, current_win)
     if bufnr then
       candidates[#candidates + 1] = bufnr
     end
@@ -456,15 +493,15 @@ local function context_bufnr()
     return candidates[1]
   end
 
-  -- A new health tab: use the tab the user came from.
+  -- A new health tab: use the tab the user came from, skipping a focused float
+  -- there as well.
   local previous = vim.fn.tabpagenr("#")
   if previous > 0 then
     local tabs = vim.api.nvim_list_tabpages()
     local tab = tabs[previous]
     if tab then
-      local win = vim.api.nvim_tabpage_get_win(tab)
-      local bufnr = vim.api.nvim_win_get_buf(win)
-      if not is_health_buffer(bufnr) then
+      local bufnr = usable_context_buffer_in_tab(tab, current_win)
+      if bufnr then
         return bufnr
       end
     end
@@ -472,7 +509,9 @@ local function context_bufnr()
 
   local alternate = vim.fn.bufnr("#")
   if alternate ~= -1 and not is_health_buffer(alternate) then
-    return alternate
+    if is_pico8_buffer(alternate) or not only_floating_windows(alternate) then
+      return alternate
+    end
   end
 
   return nil
