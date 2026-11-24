@@ -57,10 +57,11 @@ repository is the canonical client source.
   refresh autocmds with a 500 ms debounce, and include/PNG support.
 - M29 is complete: stock-aware PICO-8 comment defaults for managed includes,
   safe restore, `b:pico8_cart`/`b:pico8_cart_root`, and `:Pico8OpenCart`.
-- M30 is complete: buffer-local `include`/`includeexpr`, cart-relative `gf`
-  navigation for quoted/unquoted/nested/absolute includes and `.p8` tab
-  selectors, direct `nvim cart.p8.png` decoding, safe failure buffers, and
-  `:Pico8OpenPng` file completion.
+- M30 is complete: buffer-local `include`/`includeexpr` with a cart-scoped
+  `path`, cart-relative `gf` navigation for quoted/unquoted/nested/absolute
+  includes and `.p8` tab selectors, direct `nvim cart.p8.png` decoding with
+  virtual-buffer reuse, safe failure buffers, and `:Pico8OpenPng` file
+  completion.
 - M31, M32, and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
@@ -179,13 +180,17 @@ restored, because it is indistinguishable from the helper's value.
 M30's implementation choices were confirmed on 2026-11-23: `include` is
 buffer-local when empty, so a global value is treated as a default and
 overridden locally; `includeexpr` is local to the buffer, so any non-empty
-value is preserved as a user value. `includeexpr` prefers the complete target
-on the cursor's `#include` line, so quoted paths with spaces and literal
-`.lua:2` names survive Neovim's `gf` tokenization, then falls back to
-`v:fname`. Failed PNG auto-open leaves the named source buffer as an empty,
-read-only `nofile` buffer. Decoded `.p8.png` virtual buffers carry
-`b:pico8_cart_root`, so include navigation resolves against the source PNG's
-directory. The PNG autocmd is installed only by an enabled
+value is preserved as a user value; and `path` is scoped to the cart when it is
+empty or the default, with a custom value preserved. `includeexpr` prefers the
+complete target on the cursor's `#include` line, so quoted paths with spaces,
+literal `.lua:2` names, and selector digits survive Neovim's `gf` tokenization,
+then falls back to `v:fname`. Failed PNG auto-open leaves the named source
+buffer as an empty, read-only `nofile` buffer. Reopening a PNG reuses its
+virtual buffer. Decoded `.p8.png` virtual buffers carry `b:pico8_cart_root` and
+a scoped `path`, so include navigation resolves against the source PNG's
+directory. Vim's first unmodified-name lookup can still match the first word of
+a quoted spaced path when that word is a file in the cart; troubleshooting
+documents the workaround. The PNG autocmd is installed only by an enabled
 `require("pico_lsp").setup()`, never by the shipped config alone.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;

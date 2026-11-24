@@ -126,7 +126,9 @@ an unrelated buffer.
 The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
 `gf`, `Ctrl-W f`, and `Ctrl-W gf` open `#include` targets without requiring the
 helper or an initialized client. A relative target resolves against the cart's
-directory, not Neovim's current directory.
+directory, not Neovim's current directory. The ftplugin also scopes the
+buffer-local `path` option to the cart, so Vim's unmodified-name lookup cannot
+fall back to the working directory. A custom `path` is preserved.
 
 ```pico8
 #include "lib.lua"
@@ -145,7 +147,9 @@ report Neovim's normal `E447`/`E484` error, and no file is created.
 The ftplugin fills in defaults only when the options are empty. A non-empty
 `includeexpr` is preserved as a user value. `include` is global-local: a global
 value is a default and is overridden locally, then restored by the ftplugin
-undo hook. If you set a global `includeexpr`, `gf` uses your expression.
+undo hook. `path` is scoped only when it is empty or the default; a custom
+value is preserved. If you set a global `includeexpr`, `gf` uses your
+expression.
 
 ## Read-only `.p8.png` carts
 
@@ -165,8 +169,9 @@ The command and replacement forms are also available:
 `:Pico8OpenPng` offers file completion. It requests `pico8/decodeCart`, opens a
 `pico8-cart:` virtual buffer, marks it `nomodifiable`, and attaches the
 `pico_lsp` client. The original PNG buffer is deleted after a successful
-auto-open. `:Pico8ReloadPng` re-decodes the current virtual cart after the PNG
-file changes.
+auto-open. Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng`
+reuses the existing virtual buffer. `:Pico8ReloadPng` re-decodes the current
+virtual cart after the PNG file changes.
 
 If decoding or client startup fails, the source buffer becomes an empty,
 read-only `nofile` buffer with its name intact; raw binary data is never

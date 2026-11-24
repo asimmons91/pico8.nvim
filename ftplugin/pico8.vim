@@ -25,6 +25,19 @@ if &l:includeexpr == ""
   let b:undo_ftplugin .= "|setlocal includeexpr<"
 endif
 
+" Scope gf's unmodified-name lookup to the cart. Vim tries 'path' before
+" 'includeexpr'; leaving the default ".,," lets a same-named file in the working
+" directory win over a missing cart include. A virtual PNG buffer gets its
+" source directory from the helper instead.
+if !get(b:, "pico8_virtual_cart", 0) && (&path == "" || &path == ".,,")
+  let s:pico8_cart_dir = expand("%:p:h")
+  if s:pico8_cart_dir != ""
+    let &l:path = escape(s:pico8_cart_dir, ' ,\')
+    let b:undo_ftplugin .= "|setlocal path<"
+  endif
+  unlet s:pico8_cart_dir
+endif
+
 " Optional PICO-8 editor-style glyph shortcuts. Set g:pico8_glyph_maps = 1
 " before opening a cart. In Lua code sections (but not #include paths),
 " Shift-A..Z insert the 26 typeable P8SCII symbols (0x80-0x99) in alphabetical

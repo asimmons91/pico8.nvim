@@ -173,7 +173,9 @@ unrelated buffer it reports that no owner was found. Glyph maps remain
 The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
 `gf`, `Ctrl-W f`, and `Ctrl-W gf` open an `#include` target even when the helper
 has never been set up. Paths resolve relative to the cart's directory, not
-Neovim's current directory. Absolute paths stay absolute.
+Neovim's current directory. Absolute paths stay absolute. The ftplugin also
+scopes the buffer-local `path` option to the cart, so Vim's first unmodified-name
+lookup cannot fall back to the working directory. A custom `path` is left alone.
 
 Supported forms include:
 
@@ -193,7 +195,8 @@ targets report Neovim's normal `E447`/`E484` error and never create a file.
 The ftplugin fills in a default only when the value is empty. A non-empty
 `includeexpr` is preserved as a user value. `include` is global-local, so a
 global value is treated as a default and is overridden locally; changing the
-filetype restores it.
+filetype restores it. `path` is scoped only when it is empty or the default,
+and a custom value is preserved.
 
 ### Opening `.p8.png` carts
 
@@ -213,7 +216,9 @@ decode or client-start failure, the buffer becomes an empty, read-only
 ```
 
 `:Pico8OpenPng` offers file completion, and `:Pico8ReloadPng` re-decodes the
-current virtual cart after the PNG changes. Auto-open is installed only by
+current virtual cart after the PNG changes. Reopening the same PNG with `:edit`,
+`:split`, or `:Pico8OpenPng` reuses the existing virtual buffer instead of
+creating a duplicate. Auto-open is installed only by
 `require("pico_lsp").setup()` when the helper is not disabled; a fresh
 `setup({ disable = true })` installs no PNG autocmd. The shipped
 `lsp/pico_lsp.lua` config alone does not auto-open PNGs.

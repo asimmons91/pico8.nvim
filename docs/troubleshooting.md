@@ -116,14 +116,21 @@ above.
 
 ## `gf` does not open an include
 
-- Check the buffer-local options: `:setlocal include? includeexpr?`. In a `.p8`
-  buffer, `include` should be `^\s*#include\s\+` and `includeexpr` should call
-  `pico_lsp.includes.includeexpr`.
+- Check the buffer-local options: `:setlocal include? includeexpr? path?`. In a
+  `.p8` buffer, `include` should be `^\s*#include\s\+`, `includeexpr` should
+  call `pico_lsp.includes.includeexpr`, and `path` should name the cart
+  directory.
 - The ftplugin fills in defaults only when the value is empty. A global
   `includeexpr` is preserved as a user value; clear it or set a buffer-local
-  expression if you want PICO-8 navigation.
+  expression if you want PICO-8 navigation. A custom `path` is preserved too;
+  set it to the cart directory if you want the scoped lookup.
 - Relative paths resolve against the cart's directory, not Neovim's current
-  directory. Absolute paths stay absolute.
+  directory. Absolute paths stay absolute. The cart-scoped `path` prevents a
+  same-named file in the working directory from winning.
+- Vim tries the name it detects before `includeexpr`. For a quoted path such as
+  `"space dir/lib.lua"`, if the first word (`space`) is itself a file in the
+  cart, `gf` can open that file instead. Rename the file or use `:edit` with
+  the full path in that rare case.
 - Quoted, unquoted, whitespace-padded, nested, and space-containing paths work.
   A `:<hex digit>` suffix is stripped for `.p8`/`.p8.png` targets; a `.lua:2`
   filename is literal.
@@ -143,8 +150,9 @@ above.
 - A failed auto-open leaves an empty, read-only `nofile` buffer with the PNG
   name; raw binary data is never shown. Retry with
   `:Pico8OpenPng path/to/cart.p8.png`, which offers file completion.
-- Use `:Pico8ReloadPng` after replacing the PNG. It re-decodes the current
-  virtual buffer.
+- Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng` reuses the
+  existing virtual buffer. `:Pico8ReloadPng` re-decodes it after the PNG
+  changes.
 - Use `pico-lsp decode --output /tmp/cart.p8 cart.p8.png` to test the server
   independently.
 

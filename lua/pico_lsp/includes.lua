@@ -47,9 +47,9 @@ local function strip_tab_selector(path)
   return name
 end
 
--- Parse the target from a complete `#include` line. This is the same parser
--- the include helper uses for ownership, so `gf` and attachment agree.
-function M.target(line)
+-- Parse the raw target from a complete `#include` line. The tab selector is
+-- kept so includeexpr can recognize a cursor on the selector digit.
+local function parse_target(line)
   if type(line) ~= "string" then
     return nil
   end
@@ -62,7 +62,16 @@ function M.target(line)
   if quoted ~= nil then
     rest = quoted
   end
-  rest = rest:gsub("\\", "/")
+  return rest:gsub("\\", "/")
+end
+
+-- Parse the target from a complete `#include` line. This is the same parser
+-- the include helper uses for ownership, so `gf` and attachment agree.
+function M.target(line)
+  local rest = parse_target(line)
+  if rest == nil then
+    return nil
+  end
   return strip_tab_selector(rest)
 end
 
@@ -74,7 +83,7 @@ function M.resolve(target, directory)
   if type(target) ~= "string" then
     return target
   end
-  local parsed = M.target(target)
+  local parsed = parse_target(target)
   if parsed == nil and target:match("^%s*#include") then
     -- A directive without a usable path: leave the original text alone so
     -- Neovim reports its normal missing-file error.
@@ -142,16 +151,21 @@ end
 function M.includeexpr(fname)
   local bufnr = vim.api.nvim_get_current_buf()
   local target = nil
-  local line_target = M.target(current_line())
-  -- Only use the line target when it is consistent with the name Vim
-  -- detected. Otherwise an `[i`/`:checkpath` evaluation on another line could
-  -- resolve the wrong directive.
-  if
-    line_target
-    and line_target ~= ""
-    and (type(fname) ~= "string" or fname == "" or line_target:find(fname, 1, true) ~= nil)
-  then
-    target = line_target
+  local raw = parse_target(current_line())
+  if raw and raw ~= "" then
+    local line_target = strip_tab_selector(raw)
+    -- Check both the stripped path and the raw target so a cursor on a
+    -- `:2`/`:a` tab-selector digit still matches. The consistency check also
+    -- prevents an `[i`/`:checkpath` evaluation on another line from resolving
+    -- the wrong directive.
+    if
+      type(fname) ~= "string"
+      or fname == ""
+      or line_target:find(fname, 1, true) ~= nil
+      or raw:find(fname, 1, true) ~= nil
+    then
+      target = line_target
+    end
   end
   if not target then
     target = fname

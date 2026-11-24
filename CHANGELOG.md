@@ -19,9 +19,9 @@
 - Complete M29: keep stock PICO-8 comment settings on managed includes, expose
   `b:pico8_cart`/`b:pico8_cart_root`, restore settings on managed detach, and
   add `:Pico8OpenCart`.
-- Complete M30: add buffer-local `include`/`includeexpr` with cart-relative
-  `gf` navigation, a shared include-target resolver, direct
-  `nvim cart.p8.png` auto-open with safe failure buffers, `:Pico8OpenPng` file
-  completion, and focused include/PNG tests.
+- Complete M30: add buffer-local `include`/`includeexpr` with cart-scoped
+  `path` and cart-relative `gf` navigation, a shared include-target resolver,
+  direct `nvim cart.p8.png` auto-open with virtual-buffer reuse and safe failure
+  buffers, `:Pico8OpenPng` file completion, and focused include/PNG tests.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.
