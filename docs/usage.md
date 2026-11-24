@@ -106,9 +106,14 @@ setlocal commentstring=--\ %s
 A helper-managed include keeps `filetype=lua` and gets the same comment leaders
 when it still has stock Lua settings. `comments` gains `://` so comment-aware
 formatting recognizes PICO-8 `//` comments, while `gcc` still uses `--`. A
-custom `comments` or `commentstring` value is never overwritten. On managed
-detach, including helper shutdown, the helper restores only the values it
-changed and only if they are still in place.
+custom `comments` or `commentstring` value is never overwritten on attach. On
+managed detach, including helper shutdown, the helper restores only the values
+it changed and only if they are still in place. A later change to a different
+value is kept; setting an option to exactly the PICO-8 target is restored
+because it is indistinguishable from the helper's value.
+
+Restore records are module-local. After a plugin reload, a later detach leaves
+exact PICO-8 values in place rather than guessing the original Lua values.
 
 Managed includes expose `b:pico8_cart` (the owning cart URI) and
 `b:pico8_cart_root` (the normalized cart directory) for other plugins.

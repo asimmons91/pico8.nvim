@@ -231,13 +231,16 @@ local original_hidden = vim.o.hidden
 vim.o.hidden = false
 vim.api.nvim_buf_set_lines(lib_buf, 0, 0, false, { "-- unsaved change" })
 local open_ok = pcall(vim.cmd, "Pico8OpenCart")
-vim.o.hidden = original_hidden
-vim.bo[lib_buf].modified = false
-edit(lib)
 if open_ok then
   fail("Pico8OpenCart succeeded with a modified include and hidden off")
 end
 assert_equal(buffer_name(vim.api.nvim_get_current_buf()), vim.fs.normalize(lib), "a failed Pico8OpenCart changed buffers")
+if not vim.bo[lib_buf].modified then
+  fail("a failed Pico8OpenCart discarded the include's unsaved change")
+end
+vim.o.hidden = original_hidden
+vim.bo[lib_buf].modified = false
+edit(lib)
 
 -- Managed detach restores stock values and clears the variables ---------------
 
@@ -257,11 +260,14 @@ assert_equal(vim.b[lib_buf].pico8_cart, vim.uri_from_fname(cart), "reattach did 
 
 -- A user change after attach is preserved on detach.
 vim.bo[lib_buf].comments = ":custom-comment"
+vim.bo[lib_buf].commentstring = "// %s"
 lib_client = initialized_clients(lib_buf)[1]
 vim.lsp.buf_detach_client(lib_buf, lib_client.id)
 wait_detached(lib_buf, "the user-change detach did not clear the include state")
 assert_equal(vim.bo[lib_buf].comments, ":custom-comment", "detach overwrote a user comment change")
+assert_equal(vim.bo[lib_buf].commentstring, "// %s", "detach overwrote a user commentstring change")
 vim.bo[lib_buf].comments = LUA_COMMENTS
+vim.bo[lib_buf].commentstring = LUA_COMMENTSTRING
 
 -- Custom settings are never overwritten and never recorded -------------------
 

@@ -143,9 +143,14 @@ the buffer still has stock Lua settings:
   `//` comments;
 - `commentstring` becomes `-- %s`, so `gcc`/`gc` use `--`.
 
-A custom `comments` or `commentstring` value is never overwritten. On managed
-detach, including helper shutdown, the helper restores only the values it
-changed and only if they are still in place; a later user change is kept.
+A custom `comments` or `commentstring` value is never overwritten on attach. On
+managed detach, including helper shutdown, the helper restores only the values
+it changed and only if they are still in place. A later change to a different
+value is kept; setting an option to exactly the PICO-8 target is
+indistinguishable from the helper's value and is restored.
+
+Restore records are module-local. After a plugin reload, a later detach leaves
+exact PICO-8 values in place rather than guessing the original Lua values.
 
 Managed include buffers also expose these compatibility variables; treat them
 as read-only:

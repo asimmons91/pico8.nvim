@@ -44,7 +44,10 @@ Confirmed 2026-11-23: D2/D3 apply per option, so a custom `comments` does not
 prevent a stock/empty `commentstring` from being filled in; exact PICO-8 values
 count as user values and are not claimed or restored; D6 is limited to managed
 includes, and the command stays registered after a later disabled setup where it
-reports the disabled helper.
+reports the disabled helper. Restore records are module-local, so a plugin
+reload before detach leaves exact PICO-8 values in place. Setting an option to
+exactly the target after attach is restored, because detach cannot distinguish
+it from the helper's value.
 
 ## Scope
 
@@ -234,6 +237,9 @@ Requirements:
 - Confirmed choices: comment defaults apply per option; exact PICO-8 values are
   treated as user values and are not claimed or restored; `:Pico8OpenCart` is
   limited to managed includes and remains registered after a disabled setup.
+- Known limitation: restore records are module-local. A plugin reload before
+  detach loses them, so exact PICO-8 values stay in place rather than reverting
+  to a guessed previous value.
 
 ## Risks
 
