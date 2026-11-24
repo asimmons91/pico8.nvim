@@ -379,6 +379,14 @@ edit(owner_lib)
 vim.cmd("Pico8OpenCart")
 assert_equal(buffer_name(vim.api.nvim_get_current_buf()), vim.fs.normalize(owner_b), "Pico8OpenCart used a stale owner")
 
+-- When cart B drops the include, ownership disappears and the variables clear.
+write(owner_b, cart_lines(nil))
+edit(owner_b)
+vim.cmd("Pico8Refresh")
+wait_detached(owner_lib_buf, "removing the last owner did not detach the include")
+assert_equal(vim.b[owner_lib_buf].pico8_cart_root, nil, "removing the last owner left b:pico8_cart_root")
+assert_equal(vim.bo[owner_lib_buf].comments, LUA_COMMENTS, "removing the last owner did not restore comments")
+
 -- Disabling the helper restores settings and keeps the command --------------
 
 edit(lib)
