@@ -477,6 +477,59 @@ wait_for(function()
   return api().cart_info(include_cart_buf).tokens > debounce_tokens_before
 end, "the debounced request did not update the cache")
 
+-- Two commands on the same cart root coalesce into one request; both must
+-- notify even though only one buffer initiated the surviving response.
+do
+local project_same = tmp .. "/same-root"
+local same_cart = project_same .. "/cart.p8"
+local same_lib = project_same .. "/lib.lua"
+write(same_cart, cart_lines({ '#include "lib.lua"', "same_value = 1" }))
+write(same_lib, { "function same_lib() end" })
+local same_cart_buf = edit(same_cart)
+wait_for(function()
+  return api().cart_info(same_cart_buf) ~= nil
+end, "the same-root cart cache did not populate")
+local same_cart_uri = vim.uri_from_fname(same_cart)
+local same_lib_buf = edit(same_lib)
+wait_for(function()
+  local info = api().cart_info(same_lib_buf)
+  return info ~= nil and info.rootUri == same_cart_uri
+end, "the same-root include did not cache under the cart")
+local same_client = clients(same_cart_buf)[1]
+local restore_same = patch_request(same_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  return original(self, method, params, function(err, result)
+    vim.defer_fn(function()
+      handler(err, result)
+    end, 800)
+  end, bufnr)
+end)
+local same_notifications, restore_same_notify = start_notify_capture()
+edit(same_cart)
+vim.cmd("Pico8CartInfo")
+edit(same_lib)
+vim.cmd("Pico8CartInfo")
+local same_summaries = {}
+wait_for(function()
+  same_summaries = {}
+  for _, notification in ipairs(same_notifications) do
+    if notification.message:find("tokens", 1, true) then
+      same_summaries[#same_summaries + 1] = notification.message
+    end
+  end
+  return #same_summaries >= 2
+end, "two same-root commands did not both notify", 8000)
+restore_same_notify()
+restore_same()
+for _, summary in ipairs(same_summaries) do
+  if not summary:find(same_cart, 1, true) then
+    fail("a same-root command reported the wrong cart: " .. summary)
+  end
+end
+end
+
 -- Moving an include to another cart in the same root must not corrupt either
 -- cart's cache or leave the include on the old owner.
 do

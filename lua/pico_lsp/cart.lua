@@ -493,7 +493,7 @@ send_request = function(state, key)
       end
       local message = "pico8/cartInfo timed out"
       record_error(key, message)
-      finish_callbacks(state, generation, nil, message, bufnr)
+      finish_callbacks(state, generation, nil, message)
       send_pending_if_ready(state, key)
     end))
     if not started then
@@ -521,7 +521,7 @@ send_request = function(state, key)
     state.inflight = false
     local message = sent_ok and "pico8/cartInfo request was not sent" or tostring(sent)
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message, bufnr)
+    finish_callbacks(state, generation, nil, message)
     send_pending_if_ready(state, key)
   end
 end
@@ -581,7 +581,7 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   if err then
     message = error_message(err)
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message, bufnr)
+    finish_callbacks(state, generation, nil, message)
     send_pending_if_ready(state, key)
     return
   end
@@ -589,7 +589,7 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   if type(result) ~= "table" or type(result.rootUri) ~= "string" or result.rootUri == "" then
     message = "invalid pico8/cartInfo response"
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message, bufnr)
+    finish_callbacks(state, generation, nil, message)
     send_pending_if_ready(state, key)
     return
   end
@@ -600,14 +600,19 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
     return
   end
 
-  -- Answer callbacks before the rekey so callbacks for this generation see the
-  -- fresh value; newer callbacks move with the state and are answered by its
-  -- pending request.
-  finish_callbacks(state, generation, result, nil, bufnr)
+  -- Answer callbacks before the rekey. A response for the same root is valid
+  -- for every buffer on that root, so it answers all queued commands; a
+  -- response that rekeys the buffer only answers that buffer's callbacks.
+  local same_root = same_uri(result.rootUri, key)
+  local callback_bufnr = nil
+  if not same_root then
+    callback_bufnr = bufnr
+  end
+  finish_callbacks(state, generation, result, nil, callback_bufnr)
 
   local target_state = state
   local target_key = key
-  if result.rootUri ~= key then
+  if not same_root then
     target_state, target_key = rekey_state(state, key, result.rootUri, bufnr, client_id)
   else
     mark_buffer(bufnr, key, client_id)
