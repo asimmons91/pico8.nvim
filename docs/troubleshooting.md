@@ -119,8 +119,9 @@ above.
 - Check the buffer-local options: `:setlocal include? includeexpr? path?`. In a
   `.p8` buffer, `include` should be `^\s*#include\s\+`, `includeexpr` should
   call `pico_lsp.includes.includeexpr`, and `path` should name the cart
-  directory. After `:saveas` or `:file`, the scoped `path` follows the new
-  buffer name; a custom `path` is left alone.
+  directory (or a non-existent sentinel for a directory with glob characters).
+  After `:saveas` or `:file`, the scoped `path` follows the new buffer name; a
+  custom `path` is left alone.
 - The ftplugin fills in defaults only when the value is empty. A global
   `includeexpr` is preserved as a user value; clear it or set a buffer-local
   expression if you want PICO-8 navigation. A custom `path` is preserved too;
