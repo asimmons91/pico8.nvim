@@ -76,6 +76,10 @@ uses a cached value and does not block the statusline.
 - **D10:** the cart commands remain registered when the included-Lua helper is
   disabled because they work with any attached `pico_lsp` client. A disabled
   setup clears cached state and timers.
+- **Deliverable 5:** the pico-lsp API docs consumer link is
+  [asimmons91/pico-lsp#71](https://github.com/asimmons91/pico-lsp/pull/71).
+  It is a separate docs PR and must merge before a release that claims the
+  external link.
 
 ## Scope
 
@@ -303,7 +307,8 @@ Rules:
 - [x] `:Pico8CartInfo` shows a useful summary.
 - [x] `:Pico8Tabs` jumps to the selected tab and handles includes/PNG carts.
 - [x] A failed request does not erase the last good value.
-- [x] README and [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md) document the API and lualine recipe.
+- [x] README and [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md) document the API and lualine recipe
+      ([pico-lsp docs PR #71](https://github.com/asimmons91/pico-lsp/pull/71)).
 - [x] Headless tests and CI cover the cache and commands.
 
 ## Verification

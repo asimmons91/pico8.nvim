@@ -104,7 +104,9 @@ setlocal commentstring=--\ %s
 ```
 
 PICO-8 comment settings for cart-owned `.lua` buffers, including `//`
-recognition and `b:pico8_cart`, are proposed in M29.
+recognition, are proposed in M29. M28 already sets `b:pico8_cart` to the owning
+cart URI on helper-managed includes; M29 adds the rest of the buffer-variable
+surface and the included-buffer settings.
 
 ## Read-only `.p8.png` carts
 

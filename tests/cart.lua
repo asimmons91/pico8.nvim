@@ -26,7 +26,13 @@ local function write(path, lines)
 end
 
 local function edit(path)
-  vim.cmd.edit(vim.fn.fnameescape(path))
+  local normalized = vim.fs.normalize(path)
+  local current = vim.api.nvim_get_current_buf()
+  local name = vim.api.nvim_buf_get_name(current)
+  if name ~= "" and vim.fs.normalize(name) == normalized then
+    return current
+  end
+  vim.cmd("edit! " .. vim.fn.fnameescape(path))
   return vim.api.nvim_get_current_buf()
 end
 
@@ -222,6 +228,22 @@ if base_info.compressedStatus ~= "ok" then
   fail("small cart compressedStatus is " .. tostring(base_info.compressedStatus))
 end
 
+-- The public API defaults to the current buffer for statusline use.
+if vim.api.nvim_get_current_buf() ~= base_buf then
+  edit(base_cart)
+end
+wait_for(function()
+  return api().cart_info(base_buf) ~= nil
+end, "the base cart cache did not return before the default-buffer test")
+local default_info = api().cart_info()
+if not default_info or default_info.rootUri ~= base_info.rootUri then
+  fail("cart_info() did not use the current buffer")
+end
+assert_same(api().cart_status(), api().cart_status(base_buf), "default cart_status")
+if not pcall(api().refresh_cart_info) then
+  fail("refresh_cart_info() without a buffer errored")
+end
+
 -- The public info table must not be the cache itself.
 local mutable = api().cart_info(base_buf)
 mutable.tokens = -1
@@ -233,22 +255,49 @@ end
 -- Statusline access never sends a request.
 local base_client = clients(base_buf)[1]
 local request_calls = 0
+local sync_calls = 0
 local restore_request = patch_request(base_client, function(original, self, method, params, handler, bufnr)
   request_calls = request_calls + 1
   return original(self, method, params, handler, bufnr)
 end)
+local original_sync = base_client.request_sync
+base_client.request_sync = function(...)
+  sync_calls = sync_calls + 1
+  return original_sync(...)
+end
 for _ = 1, 100 do
   api().cart_status(base_buf)
   api().cart_info(base_buf)
 end
 restore_request()
+base_client.request_sync = original_sync
 if request_calls ~= 0 then
   fail("cart_status/cart_info sent " .. request_calls .. " requests")
+end
+if sync_calls ~= 0 then
+  fail("cart_status/cart_info sent " .. sync_calls .. " synchronous requests")
 end
 
 -- Enable the included-.lua helper for the remaining cases -----------------------
 
 require("pico_lsp").setup()
+
+-- A real directory named `pico8-cart:...` is not a virtual buffer.
+local project_colon = tmp .. "/pico8-cart:demo"
+local colon_cart = project_colon .. "/cart.p8"
+write(colon_cart, cart_lines())
+local colon_buf = edit(colon_cart)
+wait_for(function()
+  return api().cart_info(colon_buf) ~= nil
+end, "a cart in a real pico8-cart: directory did not cache")
+local colon_root = api().cart_info(colon_buf).rootUri
+local colon_ok, colon_path = pcall(vim.uri_to_fname, colon_root)
+if not colon_ok or vim.fs.normalize(colon_path) ~= vim.fs.normalize(colon_cart) then
+  fail("the colon-directory rootUri is " .. tostring(colon_root))
+end
+if api().cart_status(colon_buf) == nil then
+  fail("a cart in a real pico8-cart: directory has no statusline text")
+end
 
 -- Included .lua buffers resolve to the owning cart -------------------------------
 
@@ -264,6 +313,11 @@ wait_for(function()
 end, "the include cart cache did not populate")
 local include_cart_info = api().cart_info(include_cart_buf)
 
+-- Change the include on disk before opening it. The helper's first request for
+-- an included buffer can start before b:pico8_cart is set, so it re-keys from
+-- the include URI to the owning cart. The fresh response must replace the
+-- cart's older cache entry.
+write(include_lib, { "function lib_with_fresh_content() return 123456 end" })
 local include_lib_buf = edit(include_lib)
 wait_for(function()
   return #clients(include_lib_buf) > 0
@@ -271,6 +325,11 @@ end, "the helper did not attach the included .lua buffer")
 wait_for(function()
   return api().cart_info(include_lib_buf) ~= nil
 end, "the include buffer did not resolve to cart info")
+wait_for(function()
+  local info = api().cart_info(include_lib_buf)
+  return info ~= nil and info.tokens > include_cart_info.tokens
+end, "an include re-key discarded the fresh response")
+include_cart_info = api().cart_info(include_cart_buf)
 local include_lib_info = api().cart_info(include_lib_buf)
 if include_lib_info.rootUri ~= include_cart_info.rootUri then
   fail("include rootUri is " .. tostring(include_lib_info.rootUri))
@@ -314,6 +373,138 @@ wait_for(function()
   return api().cart_info(include_lib_buf).tokens == api().cart_info(include_cart_buf).tokens
 end, "the include cache did not follow the owning cart refresh")
 
+-- Saving a cart refreshes the cache immediately.
+edit(include_cart)
+local save_tokens_before = api().cart_info(include_cart_buf).tokens
+vim.api.nvim_buf_set_lines(include_cart_buf, -1, -1, false, {
+  "local saved_expression = 'a saved cart should refresh the statusline'",
+})
+vim.cmd("silent write")
+wait_for(function()
+  return api().cart_info(include_cart_buf).tokens > save_tokens_before
+end, "saving a cart did not refresh the cache")
+
+-- InsertLeave refreshes the current attached buffer.
+edit(include_lib)
+local insert_leave_tokens_before = api().cart_info(include_cart_buf).tokens
+vim.api.nvim_buf_set_lines(include_lib_buf, -1, -1, false, {
+  "function lib_after_insert_leave() return 98765 end",
+})
+vim.api.nvim_exec_autocmds("InsertLeave", { buffer = include_lib_buf })
+wait_for(function()
+  return api().cart_info(include_cart_buf).tokens > insert_leave_tokens_before
+end, "InsertLeave did not refresh the cache")
+
+-- TextChanged requests are debounced and coalesced.
+edit(include_cart)
+wait_for(function()
+  return api().cart_info(include_cart_buf) ~= nil
+end, "the debounce cart cache did not populate")
+-- Let any attach/save request settle before counting.
+vim.wait(600, function()
+  return false
+end)
+local debounce_client = clients(include_cart_buf)[1]
+local debounce_calls = 0
+local restore_debounce = patch_request(debounce_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" then
+    debounce_calls = debounce_calls + 1
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+local debounce_tokens_before = api().cart_info(include_cart_buf).tokens
+for index = 1, 10 do
+  vim.api.nvim_buf_set_lines(include_cart_buf, -1, -1, false, {
+    string.format("local debounce_line_%d = %d", index, index),
+  })
+  fire_text_changed(include_cart_buf)
+end
+vim.wait(150, function()
+  return false
+end)
+if debounce_calls ~= 0 then
+  fail("TextChanged issued " .. debounce_calls .. " requests before the 500 ms debounce")
+end
+wait_for(function()
+  return debounce_calls == 1
+end, "TextChanged did not issue exactly one debounced request", 4000)
+restore_debounce()
+wait_for(function()
+  return api().cart_info(include_cart_buf).tokens > debounce_tokens_before
+end, "the debounced request did not update the cache")
+
+-- Moving an include to another cart in the same root must not corrupt either
+-- cart's cache or leave the include on the old owner.
+local project_owner = tmp .. "/owner"
+local owner_a = project_owner .. "/a.p8"
+local owner_b = project_owner .. "/b.p8"
+local owner_lib = project_owner .. "/lib.lua"
+write(owner_a, cart_lines({ '#include "lib.lua"', "a_value = 1" }))
+write(owner_b, cart_lines({ '#include "lib.lua"', "b_value = 2" }))
+write(owner_lib, { "function owner_lib() end" })
+
+local owner_a_buf = edit(owner_a)
+wait_for(function()
+  return api().cart_info(owner_a_buf) ~= nil
+end, "owner cart A cache did not populate")
+local owner_a_uri = vim.uri_from_fname(owner_a)
+local owner_b_uri = vim.uri_from_fname(owner_b)
+
+local owner_lib_buf = edit(owner_lib)
+wait_for(function()
+  return api().cart_info(owner_lib_buf) ~= nil
+end, "owner include cache did not populate")
+if api().cart_info(owner_lib_buf).rootUri ~= owner_a_uri then
+  fail("the initial include owner is " .. tostring(api().cart_info(owner_lib_buf).rootUri))
+end
+
+-- Start a delayed request under A. Cart A then drops the include, so B becomes
+-- the owner. The old A response must not move the include back to A.
+local owner_lib_client = clients(owner_lib_buf)[1]
+local owner_calls = 0
+local restore_owner = patch_request(owner_lib_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  owner_calls = owner_calls + 1
+  local delay = owner_calls == 1 and 500 or 50
+  return original(self, method, params, function(err, result)
+    vim.defer_fn(function()
+      handler(err, result)
+    end, delay)
+  end, bufnr)
+end)
+api().refresh_cart_info(owner_lib_buf)
+
+-- Remove the include from A and save. B still includes it, so ownership moves.
+edit(owner_a)
+vim.api.nvim_buf_set_lines(owner_a_buf, 0, -1, false, cart_lines({ "a_value = 1" }))
+vim.cmd("silent write")
+wait_for(function()
+  return vim.b[owner_lib_buf].pico8_cart == owner_b_uri
+end, "the helper did not move the include to cart B")
+wait_for(function()
+  local info = api().cart_info(owner_lib_buf)
+  return info ~= nil and info.rootUri == owner_b_uri
+end, "the cart cache did not follow the new owner")
+-- Let the delayed old-owner response arrive.
+vim.wait(700, function()
+  return false
+end)
+restore_owner()
+local owner_b_after = api().cart_info(owner_lib_buf)
+if not owner_b_after or owner_b_after.rootUri ~= owner_b_uri then
+  fail("a late old-owner response moved the include back to cart A")
+end
+local owner_a_after = api().cart_info(owner_a_buf)
+if not owner_a_after or owner_a_after.rootUri ~= owner_a_uri then
+  fail("cart A's cache was corrupted by the include ownership change: "
+    .. vim.inspect(owner_a_after and owner_a_after.rootUri))
+end
+if owner_b_after.rootUri == owner_a_uri then
+  fail("the include still reports the old owner")
+end
+
 -- A standalone .lua cart omits the compressed segment ----------------------------
 
 local project_lua = tmp .. "/standalone"
@@ -347,6 +538,26 @@ assert_same(
   "",
   "standalone compressed-only status"
 )
+
+-- A standalone .lua cart has no parsed tabs; the picker offers the whole buffer.
+local standalone_count = vim.api.nvim_buf_line_count(standalone_buf)
+vim.api.nvim_win_set_cursor(0, { standalone_count, 0 })
+local standalone_captured, restore_standalone_select = start_select_capture(1)
+vim.cmd("Pico8Tabs")
+wait_for(function()
+  return standalone_captured.calls > 0
+end, "Pico8Tabs did not offer a standalone .lua tab")
+restore_standalone_select()
+if #standalone_captured.items ~= 1 then
+  fail("the standalone .lua picker offered " .. #standalone_captured.items .. " items")
+end
+local standalone_label = string.format("0: main (lines 1-%d)", standalone_count)
+if standalone_captured.labels[1] ~= standalone_label then
+  fail("the standalone .lua tab label is " .. standalone_captured.labels[1])
+end
+wait_for(function()
+  return vim.api.nvim_win_get_cursor(0)[1] == 1
+end, "Pico8Tabs did not jump to the standalone .lua tab")
 
 -- :Pico8CartInfo ---------------------------------------------------------------
 
@@ -399,6 +610,17 @@ end, "Pico8CartInfo without a client did not notify")
 restore_notify()
 if notifications[1].message:find("no pico_lsp client", 1, true) == nil then
   fail("the no-client message is " .. notifications[1].message)
+end
+notifications, restore_notify = start_notify_capture()
+vim.api.nvim_buf_call(idle_buf, function()
+  vim.cmd("Pico8Tabs")
+end)
+wait_for(function()
+  return #notifications > 0
+end, "Pico8Tabs without a client did not notify")
+restore_notify()
+if notifications[1].message:find("no pico_lsp client", 1, true) == nil then
+  fail("the no-client Pico8Tabs message is " .. notifications[1].message)
 end
 vim.api.nvim_buf_delete(idle_buf, { force = true })
 
@@ -465,6 +687,78 @@ wait_for(function()
 end, "Pico8Tabs did not call vim.ui.select for cancellation")
 restore_select()
 assert_same(vim.api.nvim_win_get_cursor(0), cursor_before_cancel, "cancelled Pico8Tabs moved the cursor")
+
+-- A transient fresh-request failure falls back to the cached tab list.
+local tabs_client = clients(tabs_buf)[1]
+local tabs_failure_sent = false
+local restore_tabs_failure = patch_request(tabs_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" and not tabs_failure_sent then
+    tabs_failure_sent = true
+    vim.schedule(function()
+      handler({ code = -32001, message = "cart-not-found: test" }, nil)
+    end)
+    return true, 1
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+captured, restore_select = start_select_capture(1)
+vim.cmd("Pico8Tabs")
+wait_for(function()
+  return captured.calls > 0
+end, "Pico8Tabs did not fall back to cached tabs")
+restore_select()
+restore_tabs_failure()
+if #captured.items ~= #tabs_info.tabs then
+  fail("the failed Pico8Tabs request offered " .. #captured.items .. " cached tabs")
+end
+api().refresh_cart_info(tabs_buf)
+wait_for(function()
+  return cart().last_error() == nil
+end, "the Pico8Tabs fallback error was not cleared")
+
+-- Out-of-range tab lines and zero/missing limits are handled without throwing.
+local clamp_client = clients(tabs_buf)[1]
+local clamp_info = vim.deepcopy(api().cart_info(tabs_buf))
+clamp_info.tabs = { { index = 0, name = "huge", startLine = 999, endLine = 1000 } }
+clamp_info.tokenLimit = 0
+clamp_info.charLimit = nil
+local clamp_calls = 0
+local restore_clamp = patch_request(clamp_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" then
+    clamp_calls = clamp_calls + 1
+    vim.schedule(function()
+      handler(nil, clamp_info)
+    end)
+    return true, 1
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+api().refresh_cart_info(tabs_buf)
+wait_for(function()
+  local info = api().cart_info(tabs_buf)
+  return info ~= nil and info.tabs[1] ~= nil and info.tabs[1].name == "huge"
+end, "the out-of-range tab fixture did not cache")
+local expected_clamped = string.format("%d/%d zip", clamp_info.compressed, clamp_info.compressedLimit)
+assert_same(api().cart_status(tabs_buf), expected_clamped, "zero-limit cart_status")
+captured, restore_select = start_select_capture(1)
+vim.cmd("Pico8Tabs")
+wait_for(function()
+  return captured.calls > 0
+end, "Pico8Tabs did not show the out-of-range tab")
+restore_select()
+local clamp_count = vim.api.nvim_buf_line_count(tabs_buf)
+if captured.labels[1] ~= string.format("0: huge (lines %d-%d)", clamp_count, clamp_count) then
+  fail("the clamped tab label is " .. captured.labels[1])
+end
+wait_for(function()
+  return vim.api.nvim_win_get_cursor(0)[1] == clamp_count
+end, "Pico8Tabs did not clamp the out-of-range tab line")
+restore_clamp()
+api().refresh_cart_info(tabs_buf)
+wait_for(function()
+  local info = api().cart_info(tabs_buf)
+  return info ~= nil and info.tabs[1] ~= nil and info.tabs[1].name ~= "huge"
+end, "the real tab data did not return after the clamp test")
 
 -- A cart with one tab still shows the picker.
 local project_one = tmp .. "/one-tab"
@@ -561,6 +855,25 @@ if vim.fn.filereadable(png_fixture) == 1 then
     png_lines_before,
     "Pico8Tabs modified the PNG buffer"
   )
+
+  -- Pico8ReloadPng refreshes the cached cart info after it reopens the virtual
+  -- document.
+  local png_client = clients(png_buf)[1]
+  local reload_requests = 0
+  local restore_reload = patch_request(png_client, function(original, self, method, params, handler, bufnr)
+    if method == "pico8/cartInfo" then
+      reload_requests = reload_requests + 1
+    end
+    return original(self, method, params, handler, bufnr)
+  end)
+  vim.cmd("Pico8ReloadPng")
+  wait_for(function()
+    return reload_requests > 0
+  end, "Pico8ReloadPng did not refresh the cart info cache")
+  restore_reload()
+  wait_for(function()
+    return api().cart_info(png_buf) ~= nil
+  end, "the reloaded PNG cart cache did not repopulate")
 end
 
 -- A failed refresh keeps the last good value -------------------------------------
@@ -596,9 +909,69 @@ wait_for(function()
   return cart().last_error() == nil
 end, "a successful refresh did not clear the recorded error")
 
+-- :Pico8CartInfo reports a failed fresh request and keeps the last good value.
+local command_failure_sent = false
+local command_failure_client = clients(failure_buf)[1]
+local restore_command_failure = patch_request(
+  command_failure_client,
+  function(original, self, method, params, handler, bufnr)
+    if method == "pico8/cartInfo" and not command_failure_sent then
+      command_failure_sent = true
+      vim.schedule(function()
+        handler({ code = -32001, message = "cart-not-found: test" }, nil)
+      end)
+      return true, 1
+    end
+    return original(self, method, params, handler, bufnr)
+  end
+)
+notifications, restore_notify = start_notify_capture()
+vim.cmd("Pico8CartInfo")
+wait_for(function()
+  return #notifications > 0
+end, "Pico8CartInfo did not notify on a failed request")
+restore_notify()
+restore_command_failure()
+if notifications[1].message:find("could not read cart info", 1, true) == nil then
+  fail("the failed Pico8CartInfo message is " .. notifications[1].message)
+end
+if notifications[1].message:find("no cart found", 1, true) == nil then
+  fail("the failed Pico8CartInfo did not map cart-not-found: " .. notifications[1].message)
+end
+assert_same(api().cart_info(failure_buf), failure_info, "a failed Pico8CartInfo changed the cache")
+
+-- A malformed successful response is discarded and keeps the last good value.
+local malformed_client = clients(failure_buf)[1]
+local malformed_sent = false
+local restore_malformed = patch_request(malformed_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" and not malformed_sent then
+    malformed_sent = true
+    vim.schedule(function()
+      handler(nil, { tokens = 1 })
+    end)
+    return true, 1
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+local malformed_before = api().cart_info(failure_buf)
+api().refresh_cart_info(failure_buf)
+wait_for(function()
+  local last = cart().last_error()
+  return last ~= nil and last.message == "invalid pico8/cartInfo response"
+end, "the malformed response was not recorded")
+restore_malformed()
+assert_same(api().cart_info(failure_buf), malformed_before, "a malformed response changed the cache")
+api().refresh_cart_info(failure_buf)
+wait_for(function()
+  return cart().last_error() == nil
+end, "a successful refresh did not clear the malformed-response error")
+
 -- Rapid refreshes keep one request in flight and one pending ----------------------
 
 local burst_client = clients(failure_buf)[1]
+local burst_baseline = api().cart_info(failure_buf)
+local burst_stale = vim.deepcopy(burst_baseline)
+burst_stale.tokens = 999999
 local burst_calls = 0
 local burst_in_flight = 0
 local burst_max = 0
@@ -609,18 +982,32 @@ local restore_burst = patch_request(burst_client, function(original, self, metho
   burst_calls = burst_calls + 1
   burst_in_flight = burst_in_flight + 1
   burst_max = math.max(burst_max, burst_in_flight)
+  local call = burst_calls
   return original(self, method, params, function(err, result)
+    -- The first response is stale and must be discarded. Delay the follow-up so
+    -- the test can sample the cache before the real response overwrites it.
+    local delay = call == 1 and 50 or 400
     vim.defer_fn(function()
       burst_in_flight = burst_in_flight - 1
-      handler(err, result)
-    end, 100)
+      if call == 1 then
+        handler(nil, burst_stale)
+      else
+        handler(err, result)
+      end
+    end, delay)
   end, bufnr)
 end)
 for _ = 1, 10 do
   api().refresh_cart_info(failure_buf)
 end
 wait_for(function()
-  return burst_calls >= 2 and burst_in_flight == 0
+  return burst_calls >= 2
+end, "the burst refreshes did not start the pending request", 5000)
+if api().cart_info(failure_buf).tokens == 999999 then
+  fail("a stale generation overwrote the cache")
+end
+wait_for(function()
+  return burst_in_flight == 0
 end, "the burst refreshes did not settle", 5000)
 restore_burst()
 if burst_max > 1 then
@@ -630,7 +1017,8 @@ if burst_calls > 2 then
   fail("rapid refreshes sent " .. burst_calls .. " requests instead of one plus one pending")
 end
 wait_for(function()
-  return api().cart_info(failure_buf) ~= nil
+  local info = api().cart_info(failure_buf)
+  return info ~= nil and info.tokens == burst_baseline.tokens
 end, "the burst refresh lost the cached value")
 
 -- Detach and wipe remove the cache -----------------------------------------------
@@ -644,6 +1032,41 @@ vim.lsp.buf_detach_client(detach_buf, detach_client.id)
 wait_for(function()
   return api().cart_info(detach_buf) == nil and api().cart_status(detach_buf) == nil
 end, "detaching the client did not clear the cart cache")
+
+-- A response that arrives after LspDetach must not resurrect the mapping.
+edit(include_cart)
+edit(include_lib)
+wait_for(function()
+  return #clients(include_lib_buf) > 0 and api().cart_info(include_lib_buf) ~= nil
+end, "the include did not reattach before the late-response test")
+local late_client = clients(include_lib_buf)[1]
+local restore_late = patch_request(late_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" then
+    return original(self, method, params, function(err, result)
+      vim.defer_fn(function()
+        handler(err, result)
+      end, 300)
+    end, bufnr)
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+api().refresh_cart_info(include_lib_buf)
+vim.lsp.buf_detach_client(include_lib_buf, late_client.id)
+vim.wait(600, function()
+  return false
+end)
+restore_late()
+if api().cart_info(include_lib_buf) ~= nil then
+  fail("a late response resurrected a detached include cache")
+end
+if #clients(include_lib_buf) ~= 0 then
+  fail("the late-response test left the include client attached")
+end
+edit(include_cart)
+edit(include_lib)
+wait_for(function()
+  return #clients(include_lib_buf) > 0 and api().cart_info(include_lib_buf) ~= nil
+end, "the include did not reattach after the late-response test")
 
 local wipe_buf = edit(tabs_cart)
 wait_for(function()

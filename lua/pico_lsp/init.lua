@@ -816,9 +816,13 @@ local function revalidate_managed()
         local directory = vim.fs.dirname(cart)
         local new_root = directory and normalize(directory) or nil
         if new_root and record.root_dir and same_path(new_root, record.root_dir) then
+          local previous_cart_uri = record.cart_uri
           record.cart = cart
           record.cart_uri = vim.uri_from_fname(cart)
           vim.b[bufnr].pico8_cart = record.cart_uri
+          if previous_cart_uri ~= record.cart_uri then
+            cart_module.owner_changed(bufnr, record.cart_uri)
+          end
         else
           detach_managed(bufnr, record)
           safe_attach(bufnr)

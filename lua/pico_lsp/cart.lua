@@ -41,6 +41,9 @@ local debounce_generations = {}
 local group = nil
 local commands_defined = false
 local last_error = nil
+-- Incremented by shutdown so scheduled callbacks from the previous setup do not
+-- repopulate a cleared cache.
+local epoch = 0
 
 local send_request
 local handle_response
@@ -83,7 +86,12 @@ local function is_virtual(bufnr)
     return true
   end
   local name = vim.api.nvim_buf_get_name(bufnr)
-  return name:match("pico8%-cart:") ~= nil
+  if name:match("^pico8%-cart:") ~= nil then
+    return true
+  end
+  -- Match the shipped config: a real directory named `pico8-cart:demo` is a
+  -- normal path, while a URI component `pico8-cart:/...` is a virtual buffer.
+  return name:match("[/\\]pico8%-cart:[/\\]") ~= nil or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
 -- The helper tracks the decoded PNG virtual URI. Neovim 0.11 expands URI-like
@@ -127,6 +135,23 @@ local function preferred_key(bufnr, uri)
     return vim.b[bufnr].pico8_cart
   end
   return uri
+end
+
+-- Compare file URIs by path so percent-encoding or normalization differences
+-- never reject a valid owning-cart response.
+local function same_uri(a, b)
+  if a == b then
+    return true
+  end
+  if type(a) ~= "string" or type(b) ~= "string" then
+    return false
+  end
+  if a:sub(1, 5) ~= "file:" or b:sub(1, 5) ~= "file:" then
+    return false
+  end
+  local ok_a, path_a = pcall(vim.uri_to_fname, a)
+  local ok_b, path_b = pcall(vim.uri_to_fname, b)
+  return ok_a and ok_b and vim.fs.normalize(path_a) == vim.fs.normalize(path_b)
 end
 
 local function stop_timer(timer)
@@ -243,12 +268,12 @@ local function mark_buffer(bufnr, key, client_id)
   buffers[bufnr] = true
 end
 
-local function rekey_state(state, old_key, new_key, bufnr)
+local function rekey_state(state, old_key, new_key, bufnr, client_id)
   if old_key == new_key then
     return state, new_key
   end
 
-  local client_id = state.client_id
+  client_id = client_id or state.client_id
   buffer_roots[bufnr] = nil
   buffer_clients[bufnr] = nil
 
@@ -259,11 +284,9 @@ local function rekey_state(state, old_key, new_key, bufnr)
 
   local target = root_state[new_key]
   if target then
-    if target.info == nil then
-      target.info = state.info
-    end
     if state.pending then
       target.pending = true
+      state.pending = false
     end
     for _, callback in ipairs(state.callbacks) do
       -- Moved callbacks are answered by the target's next pending response.
@@ -320,26 +343,55 @@ local function discard_state(state, message)
   finish_callbacks(state, state.gen, nil, message)
 end
 
-send_request = function(state, key)
+local function send_pending_if_ready(state, key)
+  if state.pending and not state.inflight then
+    state.pending = false
+    send_request(state, key)
+  end
+end
+
+-- Prefer the latest requester. If it closed or detached while its request was
+-- pending, another buffer sharing the root can still serve the request.
+local function request_target(state, key)
   local bufnr = state.request_buf
-  local uri = state.request_uri
+  if valid_buffer(bufnr) and client_for(bufnr) then
+    return bufnr, document_uri(bufnr)
+  end
+  for candidate in pairs(root_buffers[key] or {}) do
+    if valid_buffer(candidate) and client_for(candidate) then
+      return candidate, document_uri(candidate)
+    end
+  end
+  return nil
+end
+
+send_request = function(state, key)
+  if state.inflight then
+    state.pending = true
+    return
+  end
+
+  local bufnr, uri = request_target(state, key)
   local client = bufnr and client_for(bufnr) or nil
   if not client or not valid_buffer(bufnr) or not uri or uri == "" then
     discard_state(state, "no pico_lsp client attached to this buffer")
     return
   end
-  if state.client_id and state.client_id ~= client.id then
-    discard_state(state, "the pico_lsp client changed before the request was sent")
-    return
-  end
+
+  state.request_buf = bufnr
+  state.request_uri = uri
+  state.client_id = client.id
 
   local generation = state.gen
   state.attempt = (state.attempt or 0) + 1
   local attempt = state.attempt
-  state.client_id = client.id
   state.inflight = true
   state.pending = false
 
+  if state.timer then
+    stop_timer(state.timer)
+    state.timer = nil
+  end
   local ok, timer = pcall(vim.uv.new_timer)
   if ok and timer then
     state.timer = timer
@@ -355,10 +407,7 @@ send_request = function(state, key)
       local message = "pico8/cartInfo timed out"
       record_error(key, message)
       finish_callbacks(state, generation, nil, message)
-      if state.pending then
-        state.pending = false
-        send_request(state, key)
-      end
+      send_pending_if_ready(state, key)
     end))
     if not started then
       stop_timer(timer)
@@ -366,10 +415,11 @@ send_request = function(state, key)
     end
   end
 
+  local client_id = client.id
   local params = { textDocument = { uri = uri } }
   local sent_ok, sent = pcall(client.request, client, "pico8/cartInfo", params, function(err, result)
     vim.schedule(function()
-      handle_response(key, state, generation, attempt, bufnr, err, result)
+      handle_response(key, state, generation, attempt, bufnr, uri, client_id, err, result)
     end)
   end, bufnr)
 
@@ -385,14 +435,11 @@ send_request = function(state, key)
     local message = sent_ok and "pico8/cartInfo request was not sent" or tostring(sent)
     record_error(key, message)
     finish_callbacks(state, generation, nil, message)
-    if state.pending then
-      state.pending = false
-      send_request(state, key)
-    end
+    send_pending_if_ready(state, key)
   end
 end
 
-handle_response = function(key, state, generation, attempt, bufnr, err, result)
+handle_response = function(key, state, generation, attempt, bufnr, uri, client_id, err, result)
   if root_state[key] ~= state or state.attempt ~= attempt then
     return
   end
@@ -406,10 +453,7 @@ handle_response = function(key, state, generation, attempt, bufnr, err, result)
   -- A newer generation owns the current data. Its pending request will answer
   -- this generation's callbacks; do not overwrite the cache from stale data.
   if generation ~= state.gen then
-    if state.pending then
-      state.pending = false
-      send_request(state, key)
-    end
+    send_pending_if_ready(state, key)
     return
   end
 
@@ -417,36 +461,58 @@ handle_response = function(key, state, generation, attempt, bufnr, err, result)
   if err then
     message = error_message(err)
     record_error(key, message)
-  elseif type(result) ~= "table" or type(result.rootUri) ~= "string" or result.rootUri == "" then
-    message = "invalid pico8/cartInfo response"
-    record_error(key, message)
-  else
-    state.info = result
-    state.last_error = nil
-    clear_error(key)
-    finish_callbacks(state, generation, result, nil)
-
-    local root_uri = result.rootUri
-    if valid_buffer(bufnr) then
-      if root_uri ~= key then
-        state, key = rekey_state(state, key, root_uri, bufnr)
-      else
-        mark_buffer(bufnr, key, state.client_id)
-      end
-    end
-
-    if state.pending then
-      state.pending = false
-      send_request(state, key)
-    end
+    finish_callbacks(state, generation, nil, message)
+    send_pending_if_ready(state, key)
     return
   end
 
-  finish_callbacks(state, generation, nil, message)
-  if state.pending then
-    state.pending = false
-    send_request(state, key)
+  if type(result) ~= "table" or type(result.rootUri) ~= "string" or result.rootUri == "" then
+    message = "invalid pico8/cartInfo response"
+    record_error(key, message)
+    finish_callbacks(state, generation, nil, message)
+    send_pending_if_ready(state, key)
+    return
   end
+
+  -- Discard responses for a buffer that closed, was renamed, detached, or
+  -- re-attached to a different client while the request was in flight.
+  local current_client = client_for(bufnr)
+  local current_uri = valid_buffer(bufnr) and document_uri(bufnr) or nil
+  local preferred = current_uri and preferred_key(bufnr, current_uri) or nil
+  local helper_owner = vim.b[bufnr].pico8_cart
+  if
+    not current_client
+    or current_client.id ~= client_id
+    or current_uri ~= uri
+    or (not same_uri(preferred, key) and not same_uri(preferred, result.rootUri))
+    or (type(helper_owner) == "string" and helper_owner ~= "" and not same_uri(result.rootUri, helper_owner))
+  then
+    message = "the pico_lsp client detached before the cart info response arrived"
+    log_debug("pico-lsp: discarding cart info response: " .. message)
+    finish_callbacks(state, generation, nil, message)
+    send_pending_if_ready(state, key)
+    return
+  end
+
+  -- Answer callbacks before the rekey so callbacks for this generation see the
+  -- fresh value; newer callbacks move with the state and are answered by its
+  -- pending request.
+  finish_callbacks(state, generation, result, nil)
+
+  local target_state = state
+  local target_key = key
+  if result.rootUri ~= key then
+    target_state, target_key = rekey_state(state, key, result.rootUri, bufnr, client_id)
+  else
+    mark_buffer(bufnr, key, client_id)
+  end
+
+  -- Store the fresh response under the response's rootUri, never under the
+  -- buffer's old/provisional key.
+  target_state.info = result
+  target_state.last_error = nil
+  clear_error(target_key)
+  send_pending_if_ready(target_state, target_key)
 end
 
 local function request_key(bufnr, uri)
@@ -560,6 +626,43 @@ function M.detach(client_id, bufnr)
   end
   close_debounce(bufnr)
   unmark_buffer(bufnr)
+end
+
+-- The helper revalidated an included buffer onto a different owning cart
+-- without detaching its client. Drop the old root mapping and refresh under the
+-- new owner so the include never shows the old cart's budget.
+function M.owner_changed(bufnr, new_uri)
+  bufnr = resolve_bufnr(bufnr)
+  if not valid_buffer(bufnr) then
+    return
+  end
+  local client = client_for(bufnr)
+  if not client then
+    return
+  end
+  local key = buffer_roots[bufnr]
+  if key and (type(new_uri) ~= "string" or new_uri == "" or not same_uri(key, new_uri)) then
+    unmark_buffer(bufnr)
+  end
+  if type(new_uri) ~= "string" or new_uri == "" then
+    return
+  end
+  local state = root_state[new_uri]
+  if state and state.info then
+    mark_buffer(bufnr, new_uri, client.id)
+  end
+  -- The helper updates ownership during BufWritePost, before the server has
+  -- necessarily processed didSave/didChange. Defer so the server sees the new
+  -- cart before it resolves the include.
+  local expected_epoch = epoch
+  vim.schedule(function()
+    if expected_epoch ~= epoch then
+      return
+    end
+    if valid_buffer(bufnr) then
+      M.refresh_cart_info(bufnr)
+    end
+  end)
 end
 
 local function uri_label(uri)
@@ -860,9 +963,26 @@ function M.last_error()
   return last_error
 end
 
+-- Save and InsertLeave autocmds run alongside Neovim's LSP autocmds. Defer the
+-- request so didSave/didChange is sent before it; otherwise the server can
+-- answer from the pre-save snapshot (for example after an include moves carts).
+local function defer_refresh(bufnr)
+  local expected_epoch = epoch
+  vim.schedule(function()
+    if expected_epoch ~= epoch then
+      return
+    end
+    if not valid_buffer(bufnr) or not vim.bo[bufnr].modifiable then
+      return
+    end
+    M.refresh_cart_info(bufnr)
+  end)
+end
+
 local function schedule_refresh(bufnr)
   local generation = (debounce_generations[bufnr] or 0) + 1
   debounce_generations[bufnr] = generation
+  local expected_epoch = epoch
 
   local timer = debounce_timers[bufnr]
   if not timer then
@@ -881,7 +1001,7 @@ local function schedule_refresh(bufnr)
     DEBOUNCE_MS,
     0,
     vim.schedule_wrap(function()
-      if debounce_generations[bufnr] ~= generation then
+      if expected_epoch ~= epoch or debounce_generations[bufnr] ~= generation then
         return
       end
       close_debounce(bufnr)
@@ -897,6 +1017,7 @@ local function schedule_refresh(bufnr)
 end
 
 function M.shutdown()
+  epoch = epoch + 1
   local buffers = {}
   for bufnr in pairs(debounce_timers) do
     buffers[#buffers + 1] = bufnr
@@ -966,7 +1087,7 @@ local function ensure_autocmds()
       if not client_for(args.buf) then
         return
       end
-      M.refresh_cart_info(args.buf)
+      defer_refresh(args.buf)
     end,
   })
 
@@ -979,7 +1100,7 @@ local function ensure_autocmds()
       if not client_for(args.buf) then
         return
       end
-      M.refresh_cart_info(args.buf)
+      defer_refresh(args.buf)
     end,
   })
 

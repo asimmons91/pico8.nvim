@@ -153,7 +153,8 @@ commands without `setup`; edit-triggered refreshes use a 500 ms debounce;
 `:Pico8Tabs` always shows the picker, fetches fresh tab lines, and falls back to
 the cache on error; `:Pico8CartInfo` includes a capped per-file breakdown; and
 the cart commands stay available when the included-Lua helper is disabled. The
-pico-lsp API docs link is a separate docs change in that repository.
+pico-lsp API docs link is [asimmons91/pico-lsp#71](https://github.com/asimmons91/pico-lsp/pull/71);
+merge it before a release that claims the external link.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

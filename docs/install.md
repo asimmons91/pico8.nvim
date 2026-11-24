@@ -81,7 +81,9 @@ cart-owned `.lua` helper, and commands. Keep the plugin on `runtimepath` or
 lazy-load it before the first cart opens so those runtime files are available.
 
 `setup({ lsp = false })` skips `vim.lsp.enable("pico_lsp")` so you can call it
-yourself. The shipped config returns a plain table and has no side effects.
+yourself. Loading the shipped config also registers the cached cart statusline
+module and its commands; it does not start a client or request cart data until a
+`pico_lsp` client attaches.
 
 ### Workspace root
 

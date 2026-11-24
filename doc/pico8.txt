@@ -9,8 +9,9 @@ Call: >lua
     require("pico_lsp").setup()
 <
 The default setup enables the `pico_lsp` client for `pico8` buffers and starts
-the helper for cart-owned `.lua` files. The shipped config has no side effects
-on its own; it is loaded from `lsp/pico_lsp.lua` on 'runtimepath'.
+the helper for cart-owned `.lua` files. The shipped config is loaded from
+`lsp/pico_lsp.lua` on 'runtimepath'; loading it also registers the cached cart
+statusline module and its commands (see |pico8-statusline|).
 
 `.p8` buffers use the cart's directory as the workspace root, even outside a
 git repository. Carts in different directories use separate clients. Override
@@ -82,7 +83,7 @@ COMMANDS                                                   *pico8-commands*
 :Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
 :Pico8Refresh            Clear the include cache and rescan loaded buffers.
 :Pico8ToggleInlayHints   Toggle client-side inlay hints for this buffer.
-:Pico8CartInfo           Show the cached cart budget with file detail.
+:Pico8CartInfo           Request and show the cart budget with file detail.
 :Pico8Tabs               Pick a code tab and jump to its start line.
 
 `:Pico8Tabs` explains that tabs belong to the owning cart on an included `.lua`
