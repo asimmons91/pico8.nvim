@@ -110,6 +110,36 @@ local function capture_health_split()
   return text
 end
 
+local function capture_health_float()
+  local original_buf = vim.api.nvim_get_current_buf()
+  local original_tab = vim.api.nvim_get_current_tabpage()
+  local original_win = vim.api.nvim_get_current_win()
+  local saved_health = vim.g.health
+
+  vim.g.health = { style = "float" }
+  vim.cmd("checkhealth pico_lsp")
+  local health_buf = vim.api.nvim_get_current_buf()
+  local health_win = vim.api.nvim_get_current_win()
+  local text = table.concat(vim.api.nvim_buf_get_lines(health_buf, 0, -1, false), "\n")
+
+  if vim.api.nvim_get_current_tabpage() ~= original_tab then
+    pcall(vim.cmd, "tabclose")
+  elseif health_win ~= original_win and vim.api.nvim_win_is_valid(health_win) then
+    pcall(vim.api.nvim_win_close, health_win, true)
+  end
+  if vim.api.nvim_buf_is_valid(health_buf) then
+    pcall(vim.api.nvim_buf_delete, health_buf, { force = true })
+  end
+  if vim.api.nvim_win_is_valid(original_win) then
+    pcall(vim.api.nvim_set_current_win, original_win)
+  end
+  if vim.api.nvim_buf_is_valid(original_buf) then
+    pcall(vim.api.nvim_set_current_buf, original_buf)
+  end
+  vim.g.health = saved_health
+  return text
+end
+
 local function section(text, name)
   local header = "pico_lsp: " .. name .. " ~"
   local lines = vim.split(text, "\n", { plain = true })
@@ -247,6 +277,35 @@ if package.loaded["pico_lsp.cart"] ~= nil then
   fail("health loaded the pico_lsp.cart module")
 end
 
+for _, name in ipairs({
+  "Neovim",
+  "Configuration",
+  "Server binary",
+  "Running clients",
+  "Client features",
+  "Included .lua buffers",
+  "Helper",
+  "Tree-sitter",
+}) do
+  assert_contains(text, "pico_lsp: " .. name .. " ~", "missing health section " .. name)
+end
+assert_section(text, "Neovim", "✅ OK", "Neovim is not reported as supported")
+assert_section(text, "Configuration", "vim.lsp.config['pico_lsp']", "config check is missing")
+assert_section(text, "Configuration", "compiles (not loaded yet)", "fresh config is not reported as compile-only")
+assert_not_contains(
+  section(text, "Configuration"),
+  "✅ OK vim.lsp.config['pico_lsp'] is available",
+  "fresh config claimed to be loaded"
+)
+assert_section(text, "Server binary", "server version:", "server version is missing")
+assert_section(text, "Running clients", "no running pico_lsp clients", "client check is missing")
+assert_section(text, "Client features", "no pico8 cart is active", "feature check did not skip the health buffer")
+assert_section(text, "Included .lua buffers", "no helper-managed", "include check is missing")
+assert_section(text, "Helper", "setup() has not run", "setup state is missing")
+assert_not_contains(section(text, "Helper"), "helper commands are missing", "no-helper run warned about commands")
+assert_section(text, "Tree-sitter", "pico8 filetype detection is registered", "filetype detection is missing")
+assert_section(text, "Tree-sitter", "pico8 Tree-sitter parser", "parser status is missing")
+
 -- Tree-sitter parser status uses language.add's return value ------------------
 
 local real_language_add = vim.treesitter.language.add
@@ -271,6 +330,7 @@ vim.treesitter.language.add = real_language_add
 
 local real_get_runtime_file = vim.api.nvim_get_runtime_file
 local saved_user_config = vim.lsp.config._configs["pico_lsp"]
+local saved_wildcard_config = vim.lsp.config._configs["*"]
 vim.lsp.config._configs["pico_lsp"] = nil
 vim.api.nvim_get_runtime_file = function(pattern, all)
   if pattern == "lsp/pico_lsp.lua" then
@@ -287,6 +347,15 @@ text = capture_health()
 assert_section(text, "Configuration", "❌ ERROR", "partial config without cmd was not an error")
 assert_section(text, "Configuration", "cmd must be a non-empty list", "partial config cmd error is missing")
 vim.lsp.config._configs["pico_lsp"] = saved_user_config
+
+vim.lsp.config._configs["*"] = { cmd = { binary } }
+vim.lsp.config._configs["pico_lsp"] = { settings = {} }
+text = capture_health()
+assert_section(text, "Configuration", "has user configuration", "wildcard config state is missing")
+assert_not_contains(section(text, "Configuration"), "❌ ERROR", "wildcard cmd produced a config error")
+assert_section(text, "Server binary", "executable:", "wildcard cmd was not probed")
+vim.lsp.config._configs["*"] = saved_wildcard_config
+vim.lsp.config._configs["pico_lsp"] = saved_user_config
 vim.api.nvim_get_runtime_file = real_get_runtime_file
 
 -- A malformed shipped config is a compile error, not a crash -----------------
@@ -299,29 +368,6 @@ text = capture_health()
 assert_section(text, "Configuration", "❌ ERROR", "malformed shipped config was not an error")
 assert_section(text, "Configuration", "could not be compiled", "malformed config text is missing")
 vim.o.runtimepath = saved_rtp
-
-for _, name in ipairs({
-  "Neovim",
-  "Configuration",
-  "Server binary",
-  "Running clients",
-  "Client features",
-  "Included .lua buffers",
-  "Helper",
-  "Tree-sitter",
-}) do
-  assert_contains(text, "pico_lsp: " .. name .. " ~", "missing health section " .. name)
-end
-assert_section(text, "Neovim", "✅ OK", "Neovim is not reported as supported")
-assert_section(text, "Configuration", "vim.lsp.config['pico_lsp']", "config check is missing")
-assert_section(text, "Server binary", "server version:", "server version is missing")
-assert_section(text, "Running clients", "no running pico_lsp clients", "client check is missing")
-assert_section(text, "Client features", "no pico8 cart is active", "feature check did not skip the health buffer")
-assert_section(text, "Included .lua buffers", "no helper-managed", "include check is missing")
-assert_section(text, "Helper", "setup() has not run", "setup state is missing")
-assert_not_contains(section(text, "Helper"), "helper commands are missing", "no-helper run warned about commands")
-assert_section(text, "Tree-sitter", "pico8 filetype detection is registered", "filetype detection is missing")
-assert_section(text, "Tree-sitter", "pico8 Tree-sitter parser", "parser status is missing")
 
 -- Config resolution failures are errors ----------------------------------------
 
@@ -638,6 +684,28 @@ assert_not_contains(
   "split report used the previous tab"
 )
 pcall(vim.cmd, "tabclose 2")
+
+-- A focused floating terminal does not hide the cart context -----------------
+
+local float_buf = vim.api.nvim_create_buf(false, true)
+local float_win = vim.api.nvim_open_win(float_buf, true, {
+  relative = "editor",
+  row = 1,
+  col = 1,
+  width = 20,
+  height = 5,
+  style = "minimal",
+})
+local float_text = capture_health_float()
+assert_section(float_text, "Running clients", "current buffer attached: yes", "float report lost the current cart")
+assert_section(float_text, "Client features", "pico8.inlayHints = true", "float report lost the cart features")
+assert_not_contains(
+  section(float_text, "Client features"),
+  "no pico8 cart is active",
+  "float report used the focused floating window"
+)
+pcall(vim.api.nvim_win_close, float_win, true)
+pcall(vim.api.nvim_buf_delete, float_buf, { force = true })
 
 -- Missing helper commands warn while the helper is enabled --------------------
 

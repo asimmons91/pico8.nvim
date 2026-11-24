@@ -93,7 +93,7 @@ end
 local function get_config()
   local resolved = resolved_config()
   if resolved then
-    return resolved, nil
+    return resolved, nil, "resolved"
   end
 
   -- If the plugin's cart module is already loaded, resolving the shipped config
@@ -104,15 +104,15 @@ local function get_config()
       return vim.lsp.config["pico_lsp"]
     end)
     if not fetched then
-      return nil, tostring(config)
+      return nil, tostring(config), "error"
     end
     if type(config) == "table" then
-      return config, nil
+      return config, nil, "loaded"
     end
     if config == nil then
-      return nil, nil
+      return nil, nil, "missing"
     end
-    return nil, "vim.lsp.config['pico_lsp'] resolved to " .. type(config)
+    return nil, "vim.lsp.config['pico_lsp'] resolved to " .. type(config), "error"
   end
 
   -- Fresh session: inspect the user config and the runtime file without
@@ -123,16 +123,18 @@ local function get_config()
     return vim.lsp.config._configs
   end)
   if not inspected then
-    return nil, tostring(configs)
+    return nil, tostring(configs), "error"
   end
   if type(configs) ~= "table" then
-    return nil, "vim.lsp.config._configs is unavailable"
+    return nil, "vim.lsp.config._configs is unavailable", "error"
   end
 
   local user_config = configs["pico_lsp"]
   if user_config ~= nil and type(user_config) ~= "table" then
-    return nil, "vim.lsp.config['pico_lsp'] is not a table"
+    return nil, "vim.lsp.config['pico_lsp'] is not a table", "error"
   end
+  local wildcard_config = configs["*"]
+  local wildcard_cmd = type(wildcard_config) == "table" and wildcard_config.cmd or nil
 
   local listed, runtime_files = pcall(vim.api.nvim_get_runtime_file, "lsp/pico_lsp.lua", true)
   local has_runtime = listed and type(runtime_files) == "table" and #runtime_files > 0
@@ -142,23 +144,27 @@ local function get_config()
     for _, path in ipairs(runtime_files) do
       local loaded, compile_error = loadfile(path)
       if not loaded then
-        return nil, "lsp/pico_lsp.lua could not be compiled: " .. tostring(compile_error)
+        return nil, "lsp/pico_lsp.lua could not be compiled: " .. tostring(compile_error), "error"
       end
     end
   end
 
   if type(user_config) == "table" then
     local cmd = user_config.cmd
-    if has_runtime and cmd == nil then
-      cmd = fallback_command()
+    if cmd == nil then
+      if has_runtime then
+        cmd = fallback_command()
+      elseif wildcard_cmd ~= nil then
+        cmd = wildcard_cmd
+      end
     end
-    return { cmd = cmd }, nil
+    return { cmd = cmd }, nil, has_runtime and "inspected" or "user"
   end
 
   if has_runtime then
-    return { cmd = fallback_command() }, nil
+    return { cmd = fallback_command() }, nil, "inspected"
   end
-  return nil, nil
+  return nil, nil, "missing"
 end
 
 local function safe_len(value)
@@ -404,26 +410,53 @@ local function context_bufnr()
   end
 
   local current_win = vim.api.nvim_get_current_win()
+
+  -- A window is usable when it is not the health window and is either a normal
+  -- window or shows a pico8 buffer. This skips a focused floating terminal or
+  -- help window while still allowing a pico8 buffer displayed in a float.
+  local function usable_buffer(win)
+    if win == current_win or not vim.api.nvim_win_is_valid(win) then
+      return nil
+    end
+    local bufnr = vim.api.nvim_win_get_buf(win)
+    if is_health_buffer(bufnr) then
+      return nil
+    end
+    if vim.api.nvim_win_get_config(win).relative ~= "" and not is_pico8_buffer(bufnr) then
+      return nil
+    end
+    return bufnr
+  end
+
+  -- The alternate window is where the user came from unless another float
+  -- stole focus.
   local alternate_win = vim.fn.win_getid(vim.fn.winnr("#"))
-  if
-    alternate_win ~= 0
-    and alternate_win ~= current_win
-    and vim.api.nvim_win_is_valid(alternate_win)
-  then
-    local bufnr = vim.api.nvim_win_get_buf(alternate_win)
-    if not is_health_buffer(bufnr) then
+  if alternate_win ~= 0 then
+    local bufnr = usable_buffer(alternate_win)
+    if bufnr then
       return bufnr
     end
   end
+
+  -- Otherwise prefer a pico8 window in this tab so a focused floating
+  -- terminal does not hide the cart behind it, then any usable window.
+  local candidates = {}
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if win ~= current_win and vim.api.nvim_win_is_valid(win) then
-      local bufnr = vim.api.nvim_win_get_buf(win)
-      if not is_health_buffer(bufnr) then
-        return bufnr
-      end
+    local bufnr = usable_buffer(win)
+    if bufnr then
+      candidates[#candidates + 1] = bufnr
     end
   end
+  for _, bufnr in ipairs(candidates) do
+    if is_pico8_buffer(bufnr) then
+      return bufnr
+    end
+  end
+  if candidates[1] then
+    return candidates[1]
+  end
 
+  -- A new health tab: use the tab the user came from.
   local previous = vim.fn.tabpagenr("#")
   if previous > 0 then
     local tabs = vim.api.nvim_list_tabpages()
@@ -507,9 +540,16 @@ local function check_neovim()
   end
 end
 
-local function check_configuration(config, config_error, cmd)
+local function check_configuration(config, config_error, cmd, config_state)
   if config then
-    ok("vim.lsp.config['pico_lsp'] is available")
+    if config_state == "inspected" then
+      ok("vim.lsp.config['pico_lsp'] is present: lsp/pico_lsp.lua compiles (not loaded yet)")
+      info("config runtime behavior is not checked until it is loaded; open a cart to validate it.")
+    elseif config_state == "user" then
+      ok("vim.lsp.config['pico_lsp'] has user configuration (not resolved)")
+    else
+      ok("vim.lsp.config['pico_lsp'] is available")
+    end
   elseif config_error then
     error(
       "vim.lsp.config['pico_lsp'] could not be resolved: " .. compact(config_error),
@@ -1116,7 +1156,7 @@ function M.check()
 
   vim.health.start("pico_lsp")
 
-  local config, config_error = get_config()
+  local config, config_error, config_state = get_config()
   local cmd
   if config then
     cmd = config.cmd
@@ -1126,7 +1166,7 @@ function M.check()
 
   run_section("Neovim", check_neovim)
   run_section("Configuration", function()
-    check_configuration(config, config_error, cmd)
+    check_configuration(config, config_error, cmd, config_state)
   end)
   run_section("Server binary", function()
     check_server_binary(cmd)
