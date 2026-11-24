@@ -218,6 +218,7 @@ assert_section(text, "Included .lua buffers", "no helper-managed", "include chec
 assert_section(text, "Helper", "setup() has not run", "setup state is missing")
 assert_not_contains(section(text, "Helper"), "helper commands are missing", "no-helper run warned about commands")
 assert_section(text, "Tree-sitter", "pico8 filetype detection is registered", "filetype detection is missing")
+assert_section(text, "Tree-sitter", "pico8 Tree-sitter parser", "parser status is missing")
 
 -- Config resolution failures are errors ----------------------------------------
 
