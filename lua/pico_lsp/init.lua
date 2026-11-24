@@ -907,9 +907,7 @@ local function sync_cart_owners()
         })
         if #attached > 0 then
           local cart = find_cart(path)
-          if cart then
-            cart_module.owner_changed(bufnr, vim.uri_from_fname(cart))
-          end
+          cart_module.owner_changed(bufnr, cart and vim.uri_from_fname(cart) or nil)
         end
       end
     end

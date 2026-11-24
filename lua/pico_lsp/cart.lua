@@ -292,31 +292,46 @@ local function rekey_state(state, old_key, new_key, bufnr, client_id)
   if old_buffers then
     old_buffers[bufnr] = nil
   end
+  local old_empty = not old_buffers or next(old_buffers) == nil
 
   local target = root_state[new_key]
   if target then
-    if state.pending then
-      target.pending = true
-      state.pending = false
-    end
-    for _, callback in ipairs(state.callbacks) do
-      -- Moved callbacks are answered by the target's next pending response.
-      callback.gen = target.gen
-      target.callbacks[#target.callbacks + 1] = callback
-    end
-    state.callbacks = {}
-    if not old_buffers or next(old_buffers) == nil then
+    if old_empty then
+      if state.pending then
+        target.pending = true
+        state.pending = false
+      end
+      for _, callback in ipairs(state.callbacks) do
+        -- Moved callbacks are answered by the target's next pending response.
+        callback.gen = target.gen
+        target.callbacks[#target.callbacks + 1] = callback
+      end
+      state.callbacks = {}
       stop_timer(state.timer)
       state.timer = nil
       root_state[old_key] = nil
       root_buffers[old_key] = nil
     end
     state = target
-  else
+  elseif old_empty then
+    -- Only this buffer used the old key, which is the usual provisional
+    -- include-URI state. Rename the whole state to the owning root.
     root_state[new_key] = state
     root_state[old_key] = nil
     root_buffers[new_key] = old_buffers or {}
     root_buffers[old_key] = nil
+  else
+    -- Other buffers still use the old root. Keep their state and give this
+    -- buffer its own state at the new root.
+    state = {
+      gen = 0,
+      inflight = false,
+      pending = false,
+      callbacks = {},
+      client_id = client_id,
+    }
+    root_state[new_key] = state
+    root_buffers[new_key] = {}
   end
 
   mark_buffer(bufnr, new_key, client_id)
@@ -423,6 +438,22 @@ send_request = function(state, key)
       state.inflight = false
       stop_timer(timer)
       state.timer = nil
+      local current_client = valid_buffer(bufnr) and client_for(bufnr) or nil
+      local mapped_key = buffer_roots[bufnr]
+      if
+        not current_client
+        or current_client.id ~= state.client_id
+        or not mapped_key
+        or not same_uri(mapped_key, key)
+      then
+        discard_response(
+          state,
+          key,
+          generation,
+          "the pico_lsp client detached before the cart info request completed"
+        )
+        return
+      end
       local message = "pico8/cartInfo timed out"
       record_error(key, message)
       finish_callbacks(state, generation, nil, message)
@@ -662,9 +693,22 @@ function M.detach(client_id, bufnr)
   unmark_buffer(bufnr)
 end
 
--- The helper revalidated an included buffer onto a different owning cart
--- without detaching its client. Drop the old root mapping and refresh under the
--- new owner so the include never shows the old cart's budget.
+-- The helper revalidated a Lua buffer onto a different owning cart, or off a
+-- cart entirely, without detaching its client. Drop the old root mapping and
+-- refresh under the new owner (or the buffer's own root) so it never shows a
+-- stale cart's budget.
+local function schedule_owner_refresh(bufnr)
+  local expected_epoch = epoch
+  vim.schedule(function()
+    if expected_epoch ~= epoch then
+      return
+    end
+    if valid_buffer(bufnr) then
+      M.refresh_cart_info(bufnr)
+    end
+  end)
+end
+
 function M.owner_changed(bufnr, new_uri)
   bufnr = resolve_bufnr(bufnr)
   if not valid_buffer(bufnr) then
@@ -675,12 +719,22 @@ function M.owner_changed(bufnr, new_uri)
     return
   end
   local key = buffer_roots[bufnr]
-  local changed = not key or type(new_uri) ~= "string" or new_uri == "" or not same_uri(key, new_uri)
+  local owner_missing = type(new_uri) ~= "string" or new_uri == ""
+  local changed = not key or owner_missing or not same_uri(key, new_uri)
+  if owner_missing then
+    -- No owning cart: if the cache is already keyed by the buffer's own URI it
+    -- is a standalone .lua cart and needs no work.
+    if key and same_uri(key, document_uri(bufnr)) then
+      return
+    end
+    if changed then
+      unmark_buffer(bufnr)
+    end
+    schedule_owner_refresh(bufnr)
+    return
+  end
   if changed then
     unmark_buffer(bufnr)
-  end
-  if type(new_uri) ~= "string" or new_uri == "" then
-    return
   end
   local state = root_state[new_uri]
   if state and state.info then
@@ -689,18 +743,7 @@ function M.owner_changed(bufnr, new_uri)
       return
     end
   end
-  -- The helper updates ownership during BufWritePost, before the server has
-  -- necessarily processed didSave/didChange. Defer so the server sees the new
-  -- cart before it resolves the include.
-  local expected_epoch = epoch
-  vim.schedule(function()
-    if expected_epoch ~= epoch then
-      return
-    end
-    if valid_buffer(bufnr) then
-      M.refresh_cart_info(bufnr)
-    end
-  end)
+  schedule_owner_refresh(bufnr)
 end
 
 local function uri_label(uri)

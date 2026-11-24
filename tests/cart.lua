@@ -540,7 +540,7 @@ end, "the cart cache did not follow the new owner")
 wait_for(function()
   return owner_stale_done
 end, "the delayed old-owner response did not run", 4000)
-vim.wait(100, function()
+vim.wait(200, function()
   return false
 end)
 restore_owner()
@@ -555,6 +555,38 @@ if not owner_a_after or owner_a_after.rootUri ~= owner_a_uri then
 end
 if owner_b_after.rootUri == owner_a_uri then
   fail("the include still reports the old owner")
+end
+
+-- A response from the old owner under the new owner's key is rejected.
+local owner_fake_client = clients(owner_lib_buf)[1]
+local fake_old = vim.deepcopy(owner_b_after)
+fake_old.rootUri = owner_a_uri
+fake_old.tokens = 777777
+local fake_injected = false
+local restore_fake = patch_request(owner_fake_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  return original(self, method, params, function(err, result)
+    if not fake_injected then
+      fake_injected = true
+      handler(nil, fake_old)
+    else
+      handler(err, result)
+    end
+  end, bufnr)
+end)
+api().refresh_cart_info(owner_lib_buf)
+wait_for(function()
+  return fake_injected
+end, "the fake old-owner response did not run", 4000)
+vim.wait(200, function()
+  return false
+end)
+restore_fake()
+local owner_fake_after = api().cart_info(owner_lib_buf)
+if not owner_fake_after or owner_fake_after.rootUri ~= owner_b_uri then
+  fail("an old-owner response was accepted under the new owner")
 end
 
 -- A user-started client on an include has no b:pico8_cart. The first response
@@ -641,7 +673,7 @@ local order_newer_tokens = api().cart_info(order_cart_buf).tokens
 wait_for(function()
   return order_stale_done
 end, "the slow include response did not run", 4000)
-vim.wait(100, function()
+vim.wait(200, function()
   return false
 end)
 restore_order()
@@ -1005,12 +1037,22 @@ if vim.fn.filereadable(png_fixture) == 1 then
   )
 
   -- Pico8ReloadPng refreshes the cached cart info after it reopens the virtual
-  -- document.
+  -- document. The request must come after the didOpen notification.
   local png_client = clients(png_buf)[1]
   local reload_requests = 0
+  local reload_open_seen = false
+  local reload_request_after_open = false
+  local original_png_notify = png_client.notify
+  png_client.notify = function(self, method, params)
+    if method == "textDocument/didOpen" then
+      reload_open_seen = true
+    end
+    return original_png_notify(self, method, params)
+  end
   local restore_reload = patch_request(png_client, function(original, self, method, params, handler, bufnr)
     if method == "pico8/cartInfo" then
       reload_requests = reload_requests + 1
+      reload_request_after_open = reload_open_seen
     end
     return original(self, method, params, handler, bufnr)
   end)
@@ -1019,6 +1061,10 @@ if vim.fn.filereadable(png_fixture) == 1 then
     return reload_requests > 0
   end, "Pico8ReloadPng did not refresh the cart info cache")
   restore_reload()
+  png_client.notify = original_png_notify
+  if not reload_request_after_open then
+    fail("Pico8ReloadPng refreshed the cart info before didOpen")
+  end
   wait_for(function()
     return api().cart_info(png_buf) ~= nil
   end, "the reloaded PNG cart cache did not repopulate")
@@ -1211,7 +1257,7 @@ end
 wait_for(function()
   return late_response_done
 end, "the delayed late response did not run", 4000)
-vim.wait(100, function()
+vim.wait(200, function()
   return false
 end)
 restore_late()
@@ -1231,6 +1277,7 @@ wait_for(function()
 end, "the include did not reattach after the late-response test")
 
 -- A response for a wiped buffer must be discarded without touching vim.b.
+local wipe_errmsg_before = vim.v.errmsg
 local wipe_late_client = clients(include_lib_buf)[1]
 local wipe_late_done = false
 local restore_wipe_late = patch_request(wipe_late_client, function(original, self, method, params, handler, bufnr)
@@ -1249,10 +1296,13 @@ vim.cmd("bwipeout! " .. include_lib_buf)
 wait_for(function()
   return wipe_late_done
 end, "the wiped-buffer late response did not run", 4000)
-vim.wait(100, function()
+vim.wait(200, function()
   return false
 end)
 restore_wipe_late()
+if vim.v.errmsg ~= wipe_errmsg_before and vim.v.errmsg:find("Invalid buffer id", 1, true) then
+  fail("a wiped-buffer response raised Invalid buffer id")
+end
 if api().cart_info(include_cart_buf) == nil then
   fail("wiping an include cleared the owning cart cache")
 end
@@ -1267,6 +1317,95 @@ if api().cart_info(wipe_buf) ~= nil then
 end
 
 -- Commands stay available when the helper is disabled -----------------------------
+
+-- A user-started include that becomes standalone must not move the former
+-- cart's shared cache to the standalone root.
+require("pico_lsp").setup({ disable = true })
+local project_orphan = tmp .. "/orphan"
+local orphan_cart = project_orphan .. "/cart.p8"
+local orphan_lib = project_orphan .. "/lib.lua"
+write(orphan_cart, cart_lines({ '#include "lib.lua"', "orphan_value = 1" }))
+write(orphan_lib, { "function orphan_lib() end" })
+local orphan_cfg = vim.deepcopy(vim.lsp.config["pico_lsp"])
+orphan_cfg.root_dir = vim.fs.normalize(project_orphan)
+local orphan_cart_buf = edit(orphan_cart)
+if not vim.lsp.start(orphan_cfg, { bufnr = orphan_cart_buf }) then
+  fail("could not start the orphan cart client")
+end
+wait_for(function()
+  return api().cart_info(orphan_cart_buf) ~= nil
+end, "the orphan cart cache did not populate")
+local orphan_cart_uri = vim.uri_from_fname(orphan_cart)
+local orphan_tokens_before = api().cart_info(orphan_cart_buf).tokens
+local orphan_lib_buf = edit(orphan_lib)
+if not vim.lsp.start(orphan_cfg, { bufnr = orphan_lib_buf }) then
+  fail("could not start the orphan include client")
+end
+wait_for(function()
+  local info = api().cart_info(orphan_lib_buf)
+  return info ~= nil and info.rootUri == orphan_cart_uri
+end, "the orphan include did not cache under the cart")
+edit(orphan_cart)
+vim.api.nvim_buf_set_lines(orphan_cart_buf, 0, -1, false, cart_lines({ "orphan_value = 1" }))
+vim.cmd("silent write")
+wait_for(function()
+  local info = api().cart_info(orphan_cart_buf)
+  return info ~= nil and info.tokens ~= orphan_tokens_before
+end, "the orphan cart cache did not process the include removal")
+api().refresh_cart_info(orphan_lib_buf)
+wait_for(function()
+  local info = api().cart_info(orphan_lib_buf)
+  return info ~= nil and info.rootUri == vim.uri_from_fname(orphan_lib)
+end, "the removed include did not become a standalone cart")
+local orphan_cart_after = api().cart_info(orphan_cart_buf)
+if not orphan_cart_after or orphan_cart_after.rootUri ~= orphan_cart_uri then
+  fail("the standalone re-key cleared the former cart cache")
+end
+
+-- A real user-started include is picked up by the helper's ownership sweep.
+local project_user_owner = tmp .. "/user-owner"
+local uo_a = project_user_owner .. "/a.p8"
+local uo_b = project_user_owner .. "/b.p8"
+local uo_lib = project_user_owner .. "/lib.lua"
+write(uo_a, cart_lines({ '#include "lib.lua"', "uo_a = 1" }))
+write(uo_b, cart_lines({ '#include "lib.lua"', "uo_b = 2" }))
+write(uo_lib, { "function uo_lib() end" })
+local uo_cfg = vim.deepcopy(vim.lsp.config["pico_lsp"])
+uo_cfg.root_dir = vim.fs.normalize(project_user_owner)
+local uo_lib_buf = edit(uo_lib)
+if not vim.lsp.start(uo_cfg, { bufnr = uo_lib_buf }) then
+  fail("could not start the user-owned include client")
+end
+wait_for(function()
+  return #clients(uo_lib_buf) > 0 and api().cart_info(uo_lib_buf) ~= nil
+end, "the user-owned include cache did not populate")
+local uo_a_uri = vim.uri_from_fname(uo_a)
+if api().cart_info(uo_lib_buf).rootUri ~= uo_a_uri then
+  fail("the initial user-owned include owner is " .. tostring(api().cart_info(uo_lib_buf).rootUri))
+end
+local uo_a_buf = edit(uo_a)
+wait_for(function()
+  return api().cart_info(uo_a_buf) ~= nil
+end, "user-owner cart A cache did not populate")
+local uo_b_buf = edit(uo_b)
+wait_for(function()
+  return api().cart_info(uo_b_buf) ~= nil
+end, "user-owner cart B cache did not populate")
+require("pico_lsp").setup()
+wait_for(function()
+  return api().cart_info(uo_lib_buf) ~= nil and vim.b[uo_lib_buf].pico8_cart == nil
+end, "the enabled helper claimed or lost the user-owned include")
+edit(uo_a)
+vim.api.nvim_buf_set_lines(uo_a_buf, 0, -1, false, cart_lines({ "uo_a = 1" }))
+vim.cmd("silent write")
+wait_for(function()
+  local info = api().cart_info(uo_lib_buf)
+  return info ~= nil and info.rootUri == vim.uri_from_fname(uo_b)
+end, "the user-owned include did not follow the ownership change")
+local uo_a_after = api().cart_info(uo_a_buf)
+if not uo_a_after or uo_a_after.rootUri ~= uo_a_uri then
+  fail("syncing a user-owned include cleared cart A's cache")
+end
 
 -- A deferred save refresh must not repopulate the cache after disabling.
 local project_epoch = tmp .. "/epoch"
