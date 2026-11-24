@@ -332,6 +332,38 @@ assert_true(
 glyphs.prefetch(client, bufnr)
 wait_cache(bufnr)
 
+-- Detaching another buffer must not clear a cache that still belongs to the
+-- attached cart client.
+local cached_before_include = glyphs.cache_for(bufnr)
+vim.cmd.edit(vim.fn.fnameescape(included))
+wait_for(function()
+  return #vim.lsp.get_clients({ name = "pico_lsp", bufnr = 0 }) > 0
+end, "the helper did not attach the included .lua buffer")
+local include_buf = vim.api.nvim_get_current_buf()
+local include_client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = include_buf })[1]
+assert_true(
+  include_client.id == client.id,
+  "the helper did not reuse the cart client for the include"
+)
+local include_detached = false
+local detach_autocmd = vim.api.nvim_create_autocmd("LspDetach", {
+  callback = function(args)
+    if args.buf == include_buf then
+      include_detached = true
+    end
+  end,
+})
+vim.api.nvim_buf_delete(include_buf, { force = true })
+wait_for(function()
+  return include_detached
+end, "the include did not detach")
+vim.api.nvim_del_autocmd(detach_autocmd)
+vim.api.nvim_set_current_buf(bufnr)
+assert_true(
+  glyphs.cache_for(bufnr) == cached_before_include and cached_before_include.entries ~= nil,
+  "an include detach cleared the cache while the cart remained attached"
+)
+
 -- Replace mode returns the literal key without a request.
 glyphs.reset()
 local replace_counts, restore_replace = count_requests(client, "pico8/glyphs")
