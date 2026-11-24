@@ -418,11 +418,12 @@ local function discard_response(state, key, generation, message, bufnr)
   send_pending_if_ready(state, key)
 end
 
--- Prefer the latest requester. If it closed or detached while its request was
--- pending, another buffer sharing the root can still serve the request.
+-- Prefer the latest requester, but only if it still belongs to this root. If it
+-- was moved or detached, another buffer sharing the root can still serve the
+-- request.
 local function request_target(state, key)
   local bufnr = state.request_buf
-  if valid_buffer(bufnr) and client_for(bufnr) then
+  if valid_buffer(bufnr) and client_for(bufnr) and same_uri(buffer_roots[bufnr], key) then
     return bufnr, document_uri(bufnr)
   end
   for candidate in pairs(root_buffers[key] or {}) do
