@@ -47,9 +47,10 @@ descriptions. A custom `logo` entry at byte `128` still wins over the built-in
 
 - **D1/D4:** `lua/pico_lsp/glyphs.lua` owns the cache, keyed by client ID and
   normalized cart root. It stores server-order entries plus `by_byte` and
-  case-insensitive `names`. The cache clears on `LspDetach`, helper re-setup,
-  and a module reload. The glyph module installs its own detach cleanup so
-  base-config users get the same invalidation.
+  case-insensitive `names`. The cache clears when the client's last attached
+  buffer detaches, on helper re-setup, and on a module reload. The glyph module
+  installs its own detach cleanup so base-config users get the same
+  invalidation.
 - **D2:** Attach-time prefetch sends one asynchronous, position-independent
   `pico8/glyphs` request. `install_glyph_maps` also asks for a prefetch when a
   client is already attached; in-flight and filled caches coalesce. Read-only
