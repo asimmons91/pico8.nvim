@@ -576,6 +576,19 @@ vim.cmd("Pico8ReloadPng")
 assert_equal(vim.bo[png_buf].buflisted, false, "Pico8ReloadPng relisted an unlisted virtual cart")
 vim.bo[png_buf].buflisted = true
 
+-- A stale restore lists the cart even if an after-ftplugin unlists it ---------
+
+local unlist_group = vim.api.nvim_create_augroup("m30_unlist_test", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+  group = unlist_group,
+  pattern = "pico8",
+  callback = function(args)
+    if args.buf == png_buf then
+      vim.bo[args.buf].buflisted = false
+    end
+  end,
+})
+
 -- A :bdelete'd virtual buffer is fully restored when reopened ------------------
 
 vim.cmd("only")
@@ -657,6 +670,7 @@ end
 assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8ReloadPng after bunload changed buffers")
 assert_equal(vim.bo[png_buf].buftype, "nofile", "Pico8ReloadPng after bunload lost nofile")
 assert_equal(vim.bo[png_buf].modifiable, false, "Pico8ReloadPng after bunload made the buffer modifiable")
+pcall(vim.api.nvim_del_augroup_by_id, unlist_group)
 
 -- A custom global path survives restoration and reload ------------------------
 
@@ -686,6 +700,39 @@ vim.bo[global_buf].filetype = "text"
 assert_equal(vim.fn.eval("&path"), "/custom/global/path", "filetype undo lost a custom global path")
 vim.o.path = ".,,"
 vim.cmd("bwipeout! " .. global_buf)
+
+-- A buffer-local path from after-ftplugin survives restore and reload ---------
+
+local after_path_group = vim.api.nvim_create_augroup("m30_after_path", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+  group = after_path_group,
+  pattern = "pico8",
+  callback = function(args)
+    if args.buf == png_buf then
+      vim.bo[args.buf].path = "/custom/after/path"
+    end
+  end,
+})
+vim.cmd("buffer " .. png_buf)
+vim.cmd("bdelete " .. png_buf)
+edit(png_fixture)
+assert_equal(vim.bo[png_buf].path, "/custom/after/path", "restore replaced an after-ftplugin path")
+vim.cmd("Pico8ReloadPng")
+assert_equal(vim.bo[png_buf].path, "/custom/after/path", "reload replaced an after-ftplugin path")
+vim.cmd("bdelete " .. png_buf)
+vim.cmd("buffer " .. png_buf)
+assert_equal(vim.bo[png_buf].path, "/custom/after/path", ":buffer replaced an after-ftplugin path")
+vim.o.path = "/custom/global/path"
+vim.cmd("bdelete " .. png_buf)
+edit(png_fixture)
+assert_equal(
+  vim.bo[png_buf].path,
+  "/custom/after/path",
+  "a custom global path overrode a fresh local path"
+)
+vim.o.path = ".,,"
+pcall(vim.api.nvim_del_augroup_by_id, after_path_group)
+vim.bo[png_buf].path = includes.path_value(vim.fs.dirname(png_fixture))
 
 -- Invalid PNGs leave an empty named scratch buffer -----------------------------
 

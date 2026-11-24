@@ -580,16 +580,24 @@ local function scope_virtual_path(buf, root_dir, force)
   if not force and effective ~= "" and effective ~= ".,," then
     return
   end
-  if force then
-    local global = vim.fn.eval("&g:path")
-    if global ~= "" and global ~= ".,," then
-      -- A custom global path was masked by a local value derived from the
-      -- virtual buffer name. Remove the local value and keep the user's.
-      vim.bo[buf].path = ""
-      vim.b[buf].pico8_path_scoped = nil
-      vim.b[buf].pico8_path_value = nil
-      return
-    end
+  local tracked = vim.b[buf].pico8_path_scoped
+  if tracked and vim.bo[buf].path ~= vim.b[buf].pico8_path_value then
+    -- A later user/plugin value replaced ours; preserve it.
+    vim.b[buf].pico8_path_scoped = nil
+    vim.b[buf].pico8_path_value = nil
+    return
+  end
+  if force and not tracked and vim.bo[buf].path ~= "" then
+    -- A fresh user/plugin path was set during the restore; preserve it.
+    return
+  end
+  local global = vim.fn.eval("&g:path")
+  if global ~= "" and global ~= ".,," then
+    -- A custom global path should not be masked by a stale local value.
+    vim.bo[buf].path = ""
+    vim.b[buf].pico8_path_scoped = nil
+    vim.b[buf].pico8_path_value = nil
+    return
   end
   vim.bo[buf].path = includes.path_value(root_dir)
   vim.b[buf].pico8_path_scoped = true
@@ -607,11 +615,13 @@ local function apply_virtual_state(buf, root_dir, restore)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].swapfile = false
-  if restore then
-    vim.bo[buf].buflisted = true
-  end
   if vim.bo[buf].filetype ~= "pico8" or not vim.b[buf].did_ftplugin then
     vim.bo[buf].filetype = "pico8"
+  end
+  if restore then
+    -- Run this after FileType/after-ftplugin so every restore path lists the
+    -- stale cart consistently.
+    vim.bo[buf].buflisted = true
   end
   vim.bo[buf].modifiable = false
   vim.bo[buf].modified = false

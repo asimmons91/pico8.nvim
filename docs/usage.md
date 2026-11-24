@@ -128,8 +128,9 @@ The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
 helper or an initialized client. A relative target resolves against the cart's
 directory, not Neovim's current directory. The ftplugin also scopes the
 buffer-local `path` option to the cart, so a plain relative name cannot fall
-back to the working directory. A custom `path` is preserved, and the scoped
-path follows `:saveas`/`:file` renames. Names starting with `./` or `../` are
+back to the working directory. A custom `path`, including one set by an
+after-ftplugin or `FileType` handler, is preserved, and the scoped path follows
+`:saveas`/`:file` renames. Names starting with `./` or `../` are
 handled by Vim relative to the working directory before `includeexpr`; use an
 absolute or cart-relative path if that matters. Cart directories containing
 glob characters (`[`, `]`, `*`, `?`, or `$`) use `includeexpr` instead of Vim's
@@ -153,8 +154,8 @@ The ftplugin fills in defaults only when the options are empty. A non-empty
 `includeexpr` is preserved as a user value. `include` is global-local: a global
 value is a default and is overridden locally, then restored by the ftplugin
 undo hook. `path` is scoped only when it is empty or the default; a custom
-value is preserved. If you set a global `includeexpr`, `gf` uses your
-expression.
+value, including one set by an after-ftplugin or `FileType` handler, is
+preserved. If you set a global `includeexpr`, `gf` uses your expression.
 
 ## Read-only `.p8.png` carts
 
@@ -177,8 +178,9 @@ The command and replacement forms are also available:
 auto-open. Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng`
 reuses the existing virtual buffer and preserves buffer-local
 include/expression/path values. A `:bdelete`d or unloaded virtual cart restores
-its virtual options when loaded again; `:Pico8ReloadPng` restores its text and
-client. Reload keeps a deliberately unlisted cart unlisted.
+its virtual options when loaded again; a stale restore lists the cart.
+`:Pico8ReloadPng` restores its text and client and keeps a deliberately
+unlisted cart unlisted.
 
 If decoding or client startup fails, the source buffer becomes an empty,
 read-only `nofile` buffer with its name intact; raw binary data is never

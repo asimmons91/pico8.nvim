@@ -175,8 +175,9 @@ The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
 has never been set up. Paths resolve relative to the cart's directory, not
 Neovim's current directory. Absolute paths stay absolute. The ftplugin also
 scopes the buffer-local `path` option to the cart, so a plain relative name
-cannot fall back to the working directory. A custom `path` is left alone, and
-the scoped path follows `:saveas`/`:file` renames. Names starting with `./` or
+cannot fall back to the working directory. A custom `path`, including one set
+by an after-ftplugin or `FileType` handler, is left alone, and the scoped path
+follows `:saveas`/`:file` renames. Names starting with `./` or
 `../` are resolved by Vim relative to the working directory before
 `includeexpr`; use an absolute or cart-relative path if that matters. Cart
 directories containing glob characters (`[`, `]`, `*`, `?`, or `$`) are
@@ -225,8 +226,9 @@ current virtual cart after the PNG changes. Reopening the same PNG with `:edit`,
 `:split`, or `:Pico8OpenPng` reuses the existing virtual buffer instead of
 creating a duplicate and preserves buffer-local include/expression/path values.
 A `:bdelete`d or unloaded virtual cart restores its virtual options when loaded
-again; `:Pico8ReloadPng` restores its text and client. Reload keeps a
-deliberately unlisted cart unlisted. Auto-open is installed only by
+again; a stale restore lists the cart. `:Pico8ReloadPng` restores its text and
+client and keeps a deliberately unlisted cart unlisted. Auto-open is installed
+only by
 `require("pico_lsp").setup()` when the helper is not disabled; a fresh
 `setup({ disable = true })` installs no PNG autocmd. The shipped
 `lsp/pico_lsp.lua` config alone does not auto-open PNGs.

@@ -93,11 +93,11 @@ options, so |gf|, |CTRL-W_f|, and |CTRL-W_gf| open `#include` targets without
 helper setup or a running client. A relative target resolves against the cart's
 directory, not the current directory; absolute paths stay absolute. 'path' is
 scoped to the cart so a plain relative name cannot win from the working
-directory. A custom 'path' is preserved, and the scoped path follows
-`:saveas`/`:file` renames. Names starting with `./` or `../` are handled by Vim
-relative to the working directory before 'includeexpr'. Cart directories
-containing glob characters (`[`, `]`, `*`, `?`, or `$`) use 'includeexpr'
-instead of Vim's raw lookup.
+directory. A custom 'path', including one set by an after-ftplugin or `FileType`
+handler, is preserved, and the scoped path follows `:saveas`/`:file` renames.
+Names starting with `./` or `../` are handled by Vim relative to the working
+directory before 'includeexpr'. Cart directories containing glob characters
+(`[`, `]`, `*`, `?`, or `$`) use 'includeexpr' instead of Vim's raw lookup.
 
 Supported forms include quoted, unquoted, whitespace-padded, nested, and
 space-containing paths. A trailing `:<hex digit>` is stripped only for `.p8`
@@ -126,10 +126,11 @@ decode or client-start failure, the buffer becomes an empty, read-only
 with |:Pico8OpenPng|. The command offers file completion. Reopening the same
 PNG with `:edit`, `:split`, or |:Pico8OpenPng| reuses its virtual buffer and
 preserves buffer-local include/expression/path values. A `:bdelete`d or
-unloaded virtual cart restores its virtual options when loaded again;
-|:Pico8ReloadPng| restores its text and client and keeps a deliberately
-unlisted buffer unlisted. The virtual buffer carries `b:pico8_cart_root` and a
-scoped 'path', so |gf| resolves includes against the PNG's directory.
+unloaded virtual cart restores its virtual options when loaded again; a stale
+restore lists the cart. |:Pico8ReloadPng| restores its text and client and
+keeps a deliberately unlisted buffer unlisted. The virtual buffer carries
+`b:pico8_cart_root` and a scoped 'path', so |gf| resolves includes against the
+PNG's directory.
 
 Auto-open is installed only by `require("pico_lsp").setup()` when the helper is
 enabled. A disabled setup installs no PNG autocmd, and the shipped
