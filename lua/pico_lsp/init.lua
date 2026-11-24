@@ -690,6 +690,11 @@ function M.open_png(path)
   end
 
   scope_virtual_path(buf, root_dir)
+  local had_client = #vim.lsp.get_clients({
+    name = "pico_lsp",
+    bufnr = buf,
+    _uninitialized = true,
+  }) > 0
   local ok, started = pcall(vim.lsp.start, config, { bufnr = buf })
   local client = ok and started and attached_client(buf, started) or nil
   if not client then
@@ -716,14 +721,18 @@ function M.open_png(path)
     info.source = result.sourceUri
     info.virtual = result.virtualUri
     info.version = (tonumber(info.version) or tonumber(result.version) or 1) + 1
-    vim.lsp.buf_notify(buf, "textDocument/didOpen", {
-      textDocument = {
-        uri = info.virtual,
-        languageId = "pico8",
-        version = info.version,
-        text = result.text,
-      },
-    })
+    -- A client that was already attached will not resend didOpen on reuse.
+    -- A newly attached client sends it from vim.lsp.start.
+    if had_client then
+      vim.lsp.buf_notify(buf, "textDocument/didOpen", {
+        textDocument = {
+          uri = info.virtual,
+          languageId = "pico8",
+          version = info.version,
+          text = result.text,
+        },
+      })
+    end
     if vim.api.nvim_buf_is_valid(buf) then
       cart_module.refresh_cart_info(buf)
     end
