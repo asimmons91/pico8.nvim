@@ -578,6 +578,7 @@ local function check_server_binary(cmd)
   local shape, problem = cmd_shape(cmd)
   if not shape then
     error(problem, "Set cmd to { 'pico-lsp' } or a function that returns a command.")
+    report_running_client_versions()
     return
   end
 
