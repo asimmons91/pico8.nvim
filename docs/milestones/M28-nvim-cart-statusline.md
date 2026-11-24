@@ -1,11 +1,12 @@
 # M28 — Neovim Cart Budget Statusline and Tab Picker
 
-**Status:** Proposed — not started.
+**Status:** Done — cached cart state, statusline formatting, refresh
+autocmds, `:Pico8CartInfo`, `:Pico8Tabs`, tests, and documentation are complete.
 
 **Depends on:** M25 (drop-in configuration), M26 (helper correctness), M27
 (client capability wiring)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -45,6 +46,36 @@ uses a cached value and does not block the statusline.
 | D10 | Commands | Add `:Pico8CartInfo` and `:Pico8Tabs`. No `:Pico8NextTab`/`:Pico8PrevTab` in the first version. |
 | D11 | Tabs scope | `:Pico8Tabs` works on the root cart and on `.p8.png` virtual documents. On an included `.lua` buffer it explains that tabs belong to the owning cart. |
 | D12 | Server changes | None. Use the existing `pico8/cartInfo` response fields. |
+
+### Resolved decisions
+
+- **D1/D2:** `lua/pico_lsp/cart.lua` owns the cache and commands. The shipped
+  `lsp/pico_lsp.lua` requires it so base-config users who never call
+  `require("pico_lsp").setup()` still get automatic caching and the commands.
+- **D5/D6:** the debounce is 500 ms. Attaches, saves, `InsertLeave`, and a
+  successful PNG reload refresh immediately; `TextChanged` refreshes after the
+  debounce. Read-only virtual buffers are never edit-refreshed.
+- **D4:** helper-managed includes carry the owning cart URI in
+  `b:pico8_cart`. Other Lua buffers start under their own URI and re-key the
+  cache to the response's `rootUri` after the first success.
+- **D7/D8:** `cart_status` uses exactly the server's integers and the
+  `tok`/`ch`/`zip` labels. It returns `nil` without a cached value and `""`
+  when the requested fields produce no segments.
+- **D10:** `:Pico8CartInfo` requests fresh data and notifies a capped
+  per-file/per-include breakdown; full data stays available through
+  `cart_info()`. `:Pico8Tabs` always shows `vim.ui.select`, including a
+  single-tab cart, fetches fresh tab lines, and falls back to the last cached
+  value on error. On a standalone `.lua` cart with no parsed tabs it offers the
+  whole buffer as a single `main` tab.
+- **D11:** `:Pico8Tabs` names the owning cart on a helper-managed include and
+  does not switch buffers. On a decoded `.p8.png` buffer it jumps within the
+  virtual buffer.
+- **D4/D3:** `cart_info` returns a deep copy of the server table. Requests are
+  coalesced to one in flight plus one pending per root, stale generations never
+  update the cache, and a failed refresh keeps the last good value.
+- **D10:** the cart commands remain registered when the included-Lua helper is
+  disabled because they work with any attached `pico_lsp` client. A disabled
+  setup clears cached state and timers.
 
 ## Scope
 
@@ -264,16 +295,43 @@ Rules:
 
 ## Exit criteria
 
-- [ ] `require("pico_lsp").cart_status()` returns a cached summary in a real
+- [x] `require("pico_lsp").cart_status()` returns a cached summary in a real
       statusline without blocking.
-- [ ] `cart_info()` returns the raw server data for carts, includes, and PNG
+- [x] `cart_info()` returns the raw server data for carts, includes, and PNG
       virtual buffers.
-- [ ] Editing a cart or include refreshes the cache after the debounce.
-- [ ] `:Pico8CartInfo` shows a useful summary.
-- [ ] `:Pico8Tabs` jumps to the selected tab and handles includes/PNG carts.
-- [ ] A failed request does not erase the last good value.
-- [ ] README and [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md) document the API and lualine recipe.
-- [ ] Headless tests and CI cover the cache and commands.
+- [x] Editing a cart or include refreshes the cache after the debounce.
+- [x] `:Pico8CartInfo` shows a useful summary.
+- [x] `:Pico8Tabs` jumps to the selected tab and handles includes/PNG carts.
+- [x] A failed request does not erase the last good value.
+- [x] README and [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md) document the API and lualine recipe.
+- [x] Headless tests and CI cover the cache and commands.
+
+## Verification
+
+- `tests/cart.lua`, run by `tests/run.sh`, covers the shipped config without
+  `setup`, cache timing before the first response, statusline segments and
+  field selection, deep-copy isolation, include and standalone `.lua` carts,
+  debounced cart/include edits, `:Pico8CartInfo` detail and no-client paths,
+  `:Pico8Tabs` for multi-tab, single-tab, include, cancellation, and PNG
+  cases, failed-refresh retention, one-in-flight/one-pending coalescing, and
+  detach/wipe cleanup. It passed on Neovim 0.11.4 and 0.12.6 against a
+  pico-lsp development build.
+- `tests/run.sh` also runs the existing config, helper, correctness, features,
+  and fallback suites on both Neovim versions.
+- The plain statusline expression was checked with
+  `nvim_eval_statusline`; the `luaeval` and `_G` function forms both render the
+  cached text with no statusline plugin.
+
+## Known limitations
+
+- `:Pico8Tabs` does not open the owning cart from an included `.lua` buffer;
+  opening the cart is M29's `:Pico8OpenCart`.
+- Tab navigation commands (`:Pico8NextTab`/`:Pico8PrevTab`) are intentionally
+  absent from this milestone.
+- The cache is in memory only and is not persisted to disk. Requests are not
+  polled while Neovim is idle.
+- The lualine component is a documented recipe, not a bundled statusline
+  plugin.
 
 ## Risks
 

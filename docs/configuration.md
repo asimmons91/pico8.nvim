@@ -93,7 +93,9 @@ without scanning, and `:Pico8ToggleInlayHints` remains available.
 
 `disable = true` does not turn off the client-side code-lens or inlay-hint
 display supplied by the shipped `lsp/pico_lsp.lua`. Use the separate
-`codelens` and `inlay_hints` options for that.
+`codelens` and `inlay_hints` options for that. The cart cache and the
+`:Pico8CartInfo`/`:Pico8Tabs` commands also stay available because they work
+with any attached `pico_lsp` client; a disabled setup clears cached data.
 
 ## Code lens and inlay hints
 
@@ -146,6 +148,19 @@ state, and its save hook restores the lens.
 The shipped `on_attach` runs after `LspAttach` autocmds. To turn the display off,
 use the `codelens`/`inlay_hints` options or a wildcard `on_attach` callback
 rather than only disabling it in an `LspAttach` autocmd.
+
+## Cart statusline
+
+The cached cart budget has no setup option and is always available with the
+client surface. `require("pico_lsp").cart_status()` returns cached text for a
+root cart, an included `.lua` buffer, or a decoded `.p8.png` buffer; it never
+blocks on a request. `require("pico_lsp").cart_info()` returns the cached
+`pico8/cartInfo` table for statusline colors and other integrations.
+
+The cache refreshes asynchronously after an attach, a save, `InsertLeave`, and a
+500 ms edit debounce. Use `require("pico_lsp").refresh_cart_info()` for a manual
+refresh. See [usage](usage.md#keymaps-and-cart-budget) for the lualine and plain
+statusline recipes.
 
 ## Server settings
 
@@ -210,6 +225,5 @@ The helper reads the merged `vim.lsp.config["pico_lsp"]` value.
 
 The following are proposed and not available yet:
 
-- cached cart info/statusline (M28);
 - `:checkhealth pico_lsp` (M32);
 - `:Pico8InstallParser` (M34).

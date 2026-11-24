@@ -9,7 +9,13 @@
 
 local M = {}
 
+local cart_module = require("pico_lsp.cart")
+
 M.png_buffers = {}
+
+M.cart_info = cart_module.cart_info
+M.cart_status = cart_module.cart_status
+M.refresh_cart_info = cart_module.refresh_cart_info
 
 local warned_missing_binary = false
 local warned_glyph_maps = false
@@ -671,6 +677,9 @@ function M.reload_png()
       text = result.text,
     },
   })
+  if vim.api.nvim_buf_is_loaded(buf) then
+    cart_module.refresh_cart_info(buf)
+  end
 end
 
 -- Attach a cart-owned .lua buffer. A buffer that already has a pico_lsp client
@@ -749,6 +758,7 @@ local function attach(bufnr)
     cart = cart,
     cart_uri = vim.uri_from_fname(cart),
   }
+  vim.b[bufnr].pico8_cart = managed[bufnr].cart_uri
 end
 
 local function safe_attach(bufnr)
@@ -760,6 +770,9 @@ end
 
 local function detach_managed(bufnr, record)
   managed[bufnr] = nil
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.b[bufnr].pico8_cart = nil
+  end
   if not record then
     return
   end
@@ -805,6 +818,7 @@ local function revalidate_managed()
         if new_root and record.root_dir and same_path(new_root, record.root_dir) then
           record.cart = cart
           record.cart_uri = vim.uri_from_fname(cart)
+          vim.b[bufnr].pico8_cart = record.cart_uri
         else
           detach_managed(bufnr, record)
           safe_attach(bufnr)
@@ -812,6 +826,7 @@ local function revalidate_managed()
       elseif not attached_client(bufnr, record.client_id) then
         forget_marker(bufnr, record.client_id)
         managed[bufnr] = nil
+        vim.b[bufnr].pico8_cart = nil
       end
     end
   end
@@ -848,6 +863,7 @@ local function adopt_marked_clients()
                 cart = cart,
                 cart_uri = vim.uri_from_fname(cart),
               }
+              vim.b[bufnr].pico8_cart = managed[bufnr].cart_uri
               adopted = true
             else
               client._pico8_helper_buffers[bufnr] = nil
@@ -1011,6 +1027,7 @@ function M.refresh()
   include_cache_order = {}
   owner_cache = {}
   rescan()
+  cart_module.refresh_all()
   notify("include cache cleared; loaded buffers rescanned", vim.log.levels.INFO)
 end
 
@@ -1075,9 +1092,14 @@ function M.setup(opts)
 
   define_commands(not M.disabled)
 
+  -- The cart cache belongs to the client surface, not to the included-Lua
+  -- helper. Keep its commands available when the helper is disabled, but clear
+  -- cached data and timers on a disabled setup.
   if M.disabled then
+    cart_module.shutdown()
     return
   end
+  cart_module.setup(opts)
 
   -- Apply setup overrides to the merged config even when activation is left to
   -- the caller. A later user vim.lsp.config call still wins.

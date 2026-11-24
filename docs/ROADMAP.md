@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M27 is complete. The existing Neovim client surface is present and
-the inherited client milestones after M27 are proposed and unimplemented.
+**Status:** M28 is complete. The existing Neovim client surface is present and
+the inherited client milestones after M28 are proposed and unimplemented.
 
 **Last updated:** 2026-11-23
 
@@ -52,7 +52,10 @@ repository is the canonical client source.
   inlay-hint display, `codelens`/`inlay_hints` setup options, a
   `:Pico8ToggleInlayHints` command, and version-aware Neovim 0.11/0.12
   behavior.
-- M28–M32 and M34 are proposed.
+- M28 is complete: asynchronous `pico8/cartInfo` cache keyed by the server's
+  `rootUri`, cached statusline functions, `:Pico8CartInfo`, `:Pico8Tabs`,
+  refresh autocmds with a 500 ms debounce, and include/PNG support.
+- M29–M32 and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
@@ -64,7 +67,7 @@ repository is the canonical client source.
 | M25 | Drop-in configuration | `lsp/pico_lsp.lua`, cart-aware roots, setup activation | pico-lsp M6 | Done |
 | M26 | Helper correctness | Buffer-aware includes, root-matched clients, managed detach | pico-lsp M6, M25 | Done |
 | M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Done |
-| M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Proposed |
+| M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Done |
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Proposed |
 | M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Proposed |
 | M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Proposed |
@@ -78,7 +81,8 @@ repository is the canonical client source.
 1. **P0** — keep the skeleton green.
 2. **M25** — configuration foundation (complete). **M26** — harden the include
    helper (complete). **M27** — show the server's lens and hints (complete).
-3. **M28–M31** — visible and ergonomic client features.
+   **M28** — cached cart statusline and tab picker (complete).
+3. **M29–M31** — visible and ergonomic client features.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.
 6. **M34** — parser installer.
@@ -143,11 +147,20 @@ reconciles stale display state with the current options, a bounded post-attach
 hint refresh handles the server `didOpen` race, and the shipped `on_attach`
 preserves a wildcard `vim.lsp.config("*")` callback.
 
+M28's implementation choices were confirmed on 2026-11-23: the shipped
+`lsp/pico_lsp.lua` loads the cart module so base-config users get the cache and
+commands without `setup`; edit-triggered refreshes use a 500 ms debounce;
+`:Pico8Tabs` always shows the picker, fetches fresh tab lines, and falls back to
+the cache on error; `:Pico8CartInfo` includes a capped per-file breakdown; and
+the cart commands stay available when the included-Lua helper is disabled. The
+pico-lsp API docs link is a separate docs change in that repository.
+
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
 2. **Parser distribution:** vendored sources (current) versus prebuilt parser
    assets per OS/architecture.
 3. **LazyVim extra:** contribute upstream after the plugin and Mason package
    are stable, rather than treating a plugin as an extra.
-4. **Statusline surface:** a plain cached function first; optional lualine
-   recipe, not a hard dependency.
+4. **Statusline surface:** resolved in M28 — cached `cart_info`/`cart_status`
+   functions with documented lualine and plain statusline recipes; no
+   statusline dependency.
