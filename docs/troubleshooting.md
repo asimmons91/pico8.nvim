@@ -60,8 +60,11 @@ above.
   external edit.
 - `:Pico8OpenCart` opens the owner from a managed include and reports
   `no owning cart` on unmanaged buffers.
-- Disabling the helper restores the comment values it changed, but leaves a
-  value you changed after attach in place. `b:pico8_cart` and
+- Disabling the helper restores the comment values it changed and leaves a
+  later change to a different value in place. Setting an option to exactly the
+  PICO-8 target is restored because it is indistinguishable from the helper's
+  value. Restore records are module-local: after a plugin reload, disabling or
+  detaching leaves exact PICO-8 values in place. `b:pico8_cart` and
   `b:pico8_cart_root` are cleared.
 
 ## Lens or hints are missing

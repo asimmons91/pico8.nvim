@@ -28,8 +28,9 @@
   when the buffer still has stock or empty Lua values, record only what changed,
   and restore it on managed detach when still in place. Managed includes expose
   `b:pico8_cart`/`b:pico8_cart_root` and `:Pico8OpenCart`; exact PICO-8 values
-  are treated as user values, and the command is managed-include only. Tests are
-  in `tests/include_buffers.lua`.
+  are treated as user values, and the command is managed-include only. Restore
+  records are module-local, so a plugin reload before detach leaves exact
+  PICO-8 values in place. Tests are in `tests/include_buffers.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

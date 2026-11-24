@@ -165,7 +165,11 @@ applied per option, so a custom `comments` does not prevent a stock/empty
 values and are neither claimed nor restored; `:Pico8OpenCart` works only for
 helper-managed includes (a user-started `pico_lsp` attachment reports no owner);
 and the command stays registered after a later disabled setup, where it reports
-the disabled helper. A fresh disabled setup does not register it.
+the disabled helper. A fresh disabled setup does not register it. Restore
+records are module-local, so a plugin reload before detach leaves exact PICO-8
+values in place; this follows the exact-target rule rather than guessing a
+previous value. Setting an option to exactly the target after attach is also
+restored, because it is indistinguishable from the helper's value.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

@@ -27,8 +27,11 @@ created; a client started by the user is left alone.
 A managed include keeps `filetype=lua`. When it still has stock Lua comment
 settings, the helper sets `comments=:---,:--,://` so `//` is recognized by
 comment formatting, and `commentstring=--\ %s` so `gcc` uses `--`. Custom values
-are not overwritten. Managed detach, including disabling the helper, restores
-only the values the helper changed and only if they are still in place.
+are not overwritten on attach. Managed detach, including disabling the helper,
+restores only the values the helper changed and only if they are still in
+place. A later change to a different value is kept; an option set to exactly
+the PICO-8 target is restored. Restore records are module-local, so after a
+plugin reload a later detach leaves exact PICO-8 values in place.
 `b:pico8_cart` holds the owning cart URI and `b:pico8_cart_root` its directory.
 
 Options:
