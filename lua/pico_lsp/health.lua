@@ -76,20 +76,79 @@ local function value_at(table_value, path)
   return current
 end
 
-local function get_config()
-  local fetched, config = pcall(function()
-    return vim.lsp.config["pico_lsp"]
+local fallback_command
+
+local function resolved_config()
+  local ok, resolved = pcall(function()
+    local enabled = vim.lsp._enabled_configs
+    local entry = type(enabled) == "table" and enabled["pico_lsp"] or nil
+    return entry and entry.resolved_config or nil
   end)
-  if not fetched then
-    return nil, tostring(config)
+  if ok and type(resolved) == "table" then
+    return resolved
   end
-  if type(config) == "table" then
+  return nil
+end
+
+local function get_config()
+  local resolved = resolved_config()
+  if resolved then
+    return resolved, nil
+  end
+
+  -- If the plugin's cart module is already loaded, resolving the shipped config
+  -- cannot register new commands or autocmds. Use the public API for the exact
+  -- merged value.
+  if package.loaded["pico_lsp.cart"] ~= nil then
+    local fetched, config = pcall(function()
+      return vim.lsp.config["pico_lsp"]
+    end)
+    if not fetched then
+      return nil, tostring(config)
+    end
+    if type(config) == "table" then
+      return config, nil
+    end
+    if config == nil then
+      return nil, nil
+    end
+    return nil, "vim.lsp.config['pico_lsp'] resolved to " .. type(config)
+  end
+
+  -- Fresh session: inspect the user config and the runtime file without
+  -- executing lsp/pico_lsp.lua, which would register the cart commands and
+  -- autocmds as a side effect of a health check. `_configs` is the assignment
+  -- table on Neovim 0.11/0.12; reading it does not resolve the runtime config.
+  local inspected, configs = pcall(function()
+    return vim.lsp.config._configs
+  end)
+  if not inspected then
+    return nil, tostring(configs)
+  end
+  if type(configs) ~= "table" then
+    return nil, "vim.lsp.config._configs is unavailable"
+  end
+
+  local user_config = configs["pico_lsp"]
+  if user_config ~= nil and type(user_config) ~= "table" then
+    return nil, "vim.lsp.config['pico_lsp'] is not a table"
+  end
+
+  local listed, runtime_files = pcall(vim.api.nvim_get_runtime_file, "lsp/pico_lsp.lua", true)
+  local has_runtime = listed and type(runtime_files) == "table" and #runtime_files > 0
+
+  if type(user_config) == "table" then
+    local config = vim.deepcopy(user_config)
+    if has_runtime and config.cmd == nil then
+      config.cmd = fallback_command()
+    end
     return config, nil
   end
-  if config == nil then
-    return nil, nil
+
+  if has_runtime then
+    return { cmd = fallback_command() }, nil
   end
-  return nil, "vim.lsp.config['pico_lsp'] resolved to " .. type(config)
+  return nil, nil
 end
 
 local function safe_len(value)
@@ -104,7 +163,7 @@ end
 
 -- Same precedence as lsp/pico_lsp.lua. Used when the shipped config is not on
 -- runtimepath so the binary check can still explain what the helper would run.
-local function fallback_command()
+fallback_command = function()
   local configured = vim.g.pico_lsp_cmd
   if type(configured) == "string" and configured ~= "" then
     return { configured }
@@ -324,39 +383,33 @@ local function is_health_buffer(bufnr)
 end
 
 -- :checkhealth opens its own buffer before running this module, so the current
--- buffer is not the one the user was editing. Prefer a normal window in the
--- current tab, then the previous tab's active window, then the alternate
--- buffer, to report the cart the user actually had open.
+-- buffer is not the one the user was editing. A split or `g:health.style =
+-- 'float'` report shares the user's tab; a plain report opens a new tab. Prefer
+-- a non-health window in the current tab, then the previous tab's active
+-- window, then the alternate buffer.
 local function context_bufnr()
   local current = vim.api.nvim_get_current_buf()
   if not is_health_buffer(current) then
     return current
   end
 
-  -- `g:health.style = 'float'` keeps the user's tab active and puts the report
-  -- in a floating window. Prefer a normal window in this tab before looking at
-  -- a different tab.
   local current_win = vim.api.nvim_get_current_win()
-  local current_config = vim.api.nvim_win_get_config(current_win)
-  if current_config.relative ~= "" then
-    local alternate_win = vim.fn.win_getid(vim.fn.winnr("#"))
-    if
-      alternate_win ~= 0
-      and alternate_win ~= current_win
-      and vim.api.nvim_win_is_valid(alternate_win)
-      and vim.api.nvim_win_get_config(alternate_win).relative == ""
-    then
-      local bufnr = vim.api.nvim_win_get_buf(alternate_win)
+  local alternate_win = vim.fn.win_getid(vim.fn.winnr("#"))
+  if
+    alternate_win ~= 0
+    and alternate_win ~= current_win
+    and vim.api.nvim_win_is_valid(alternate_win)
+  then
+    local bufnr = vim.api.nvim_win_get_buf(alternate_win)
+    if not is_health_buffer(bufnr) then
+      return bufnr
+    end
+  end
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if win ~= current_win and vim.api.nvim_win_is_valid(win) then
+      local bufnr = vim.api.nvim_win_get_buf(win)
       if not is_health_buffer(bufnr) then
         return bufnr
-      end
-    end
-    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      if win ~= current_win and vim.api.nvim_win_get_config(win).relative == "" then
-        local bufnr = vim.api.nvim_win_get_buf(win)
-        if not is_health_buffer(bufnr) then
-          return bufnr
-        end
       end
     end
   end
@@ -913,8 +966,8 @@ local function check_helper(cmd)
 
   if disabled then
     info(
-      "helper is disabled"
-        .. (setup_disabled and " by setup({ disable = true })" or " by vim.g.pico_lsp_helper_disabled")
+      "helper is disabled by "
+        .. (disabled_global and "vim.g.pico_lsp_helper_disabled" or "setup({ disable = true })")
     )
   elseif setup_ran and disabled_global then
     warn(
@@ -1010,8 +1063,8 @@ local function check_treesitter()
   if not language or type(language.add) ~= "function" then
     info("Tree-sitter API is unavailable; Vim syntax highlighting still works")
   else
-    local loaded = pcall(language.add, "pico8")
-    if loaded then
+    local added, language_id = pcall(language.add, "pico8")
+    if added and language_id then
       ok("pico8 Tree-sitter parser loads")
     else
       info("pico8 Tree-sitter parser is not available; Vim syntax highlighting still works")
@@ -1042,7 +1095,12 @@ function M.check()
   vim.health.start("pico_lsp")
 
   local config, config_error = get_config()
-  local cmd = config and config.cmd or fallback_command()
+  local cmd
+  if config then
+    cmd = config.cmd
+  else
+    cmd = fallback_command()
+  end
 
   run_section("Neovim", check_neovim)
   run_section("Configuration", function()

@@ -81,6 +81,35 @@ local function capture_health()
   return text
 end
 
+-- Split reports resolve the cart in the current tab before looking at the
+-- previous tab.
+local function capture_health_split()
+  local original_buf = vim.api.nvim_get_current_buf()
+  local original_tab = vim.api.nvim_get_current_tabpage()
+  local original_win = vim.api.nvim_get_current_win()
+
+  vim.cmd("vertical checkhealth pico_lsp")
+  local health_buf = vim.api.nvim_get_current_buf()
+  local health_win = vim.api.nvim_get_current_win()
+  local text = table.concat(vim.api.nvim_buf_get_lines(health_buf, 0, -1, false), "\n")
+
+  if vim.api.nvim_get_current_tabpage() ~= original_tab then
+    pcall(vim.cmd, "tabclose")
+  elseif health_win ~= original_win and vim.api.nvim_win_is_valid(health_win) then
+    pcall(vim.cmd, "close")
+  end
+  if vim.api.nvim_buf_is_valid(health_buf) then
+    pcall(vim.api.nvim_buf_delete, health_buf, { force = true })
+  end
+  if vim.api.nvim_win_is_valid(original_win) then
+    pcall(vim.api.nvim_set_current_win, original_win)
+  end
+  if vim.api.nvim_buf_is_valid(original_buf) then
+    pcall(vim.api.nvim_set_current_buf, original_buf)
+  end
+  return text
+end
+
 local function section(text, name)
   local header = "pico_lsp: " .. name .. " ~"
   local lines = vim.split(text, "\n", { plain = true })
@@ -182,10 +211,25 @@ local function data_tree()
   return entries
 end
 
+local function side_effect_snapshot()
+  return {
+    commands = {
+      Pico8CartInfo = vim.fn.exists(":Pico8CartInfo"),
+      Pico8Tabs = vim.fn.exists(":Pico8Tabs"),
+      Pico8OpenPng = vim.fn.exists(":Pico8OpenPng"),
+    },
+    autocmds = {
+      cart = vim.fn.exists("#pico_lsp_cart#LspAttach"),
+      helper = vim.fn.exists("#pico_lsp_helper#LspAttach"),
+    },
+  }
+end
+
 -- Read-only with no helper and no client --------------------------------------
 
 local before_buffers = snapshot_buffers()
 local before_data = data_tree()
+local before_side_effects = side_effect_snapshot()
 local before_clients = vim.lsp.get_clients({ name = "pico_lsp" })
 local text = capture_health()
 
@@ -196,6 +240,46 @@ assert_buffer_snapshot(before_buffers, "read-only check")
 if not vim.deep_equal(data_tree(), before_data) then
   fail("health changed the stdpath('data') tree")
 end
+if not vim.deep_equal(side_effect_snapshot(), before_side_effects) then
+  fail("health registered commands or autocmds")
+end
+
+-- Tree-sitter parser status uses language.add's return value ------------------
+
+local real_language_add = vim.treesitter.language.add
+vim.treesitter.language.add = function()
+  return nil, "No parser for language pico8"
+end
+text = capture_health()
+local tree = section(text, "Tree-sitter")
+assert_contains(tree, "not available", "absent parser was not reported as unavailable")
+assert_not_contains(tree, "✅ OK pico8 Tree-sitter parser loads", "absent parser was reported as OK")
+assert_contains(tree, "docs/install.md#tree-sitter", "absent parser has no install guidance")
+
+vim.treesitter.language.add = function()
+  return true
+end
+text = capture_health()
+tree = section(text, "Tree-sitter")
+assert_contains(tree, "✅ OK pico8 Tree-sitter parser loads", "available parser was not reported as OK")
+vim.treesitter.language.add = real_language_add
+
+-- A missing shipped config is a warning, not a crash -------------------------
+
+local real_get_runtime_file = vim.api.nvim_get_runtime_file
+local saved_user_config = vim.lsp.config._configs["pico_lsp"]
+vim.lsp.config._configs["pico_lsp"] = nil
+vim.api.nvim_get_runtime_file = function(pattern, all)
+  if pattern == "lsp/pico_lsp.lua" then
+    return {}
+  end
+  return real_get_runtime_file(pattern, all)
+end
+text = capture_health()
+assert_section(text, "Configuration", "missing", "missing shipped config was not reported")
+assert_section(text, "Configuration", "not on 'runtimepath'", "missing config advice is missing")
+vim.api.nvim_get_runtime_file = real_get_runtime_file
+vim.lsp.config._configs["pico_lsp"] = saved_user_config
 
 for _, name in ipairs({
   "Neovim",
@@ -344,6 +428,12 @@ assert_section(text, "Configuration", "❌ ERROR", "non-string cmd entry was not
 assert_section(text, "Configuration", "cmd[1]", "non-string cmd entry index is missing")
 vim.lsp.config("pico_lsp", { cmd = { binary } })
 
+vim.lsp.config("pico_lsp", { cmd = false })
+text = capture_health()
+assert_section(text, "Configuration", "❌ ERROR", "false cmd was not an error")
+assert_section(text, "Configuration", "cmd must be a non-empty list", "false cmd text is missing")
+vim.lsp.config("pico_lsp", { cmd = { binary } })
+
 -- A configured server log path is reported -----------------------------------
 
 local server_log = project .. "/pico-lsp.log"
@@ -361,6 +451,33 @@ text = capture_health()
 assert_section(text, "Server binary", "⚠️ WARNING", "non-executable path did not warn")
 assert_section(text, "Server binary", "not an executable file", "non-executable path text is missing")
 vim.lsp.config("pico_lsp", { cmd = { binary } })
+
+-- Failed version probes warn with the raw output ------------------------------
+
+local real_system = vim.system
+vim.system = function()
+  return {
+    wait = function()
+      return { code = 1, signal = 0, stdout = "", stderr = "probe failed" }
+    end,
+  }
+end
+text = capture_health()
+assert_section(text, "Server binary", "⚠️ WARNING", "non-zero version probe did not warn")
+assert_section(text, "Server binary", "exit code 1", "non-zero version probe status is missing")
+assert_section(text, "Server binary", "probe failed", "non-zero version probe output is missing")
+
+vim.system = function()
+  return {
+    wait = function()
+      return { code = nil, signal = 15, stdout = "", stderr = "" }
+    end,
+  }
+end
+text = capture_health()
+assert_section(text, "Server binary", "⚠️ WARNING", "timed-out version probe did not warn")
+assert_section(text, "Server binary", "signal 15", "timed-out version probe status is missing")
+vim.system = real_system
 
 -- A running client with a different version warns ----------------------------
 
@@ -411,6 +528,14 @@ if is_012 then
   assert_section(text, "Client features", "code lens client-side: disabled", "code lens is not disabled")
   assert_section(text, "Client features", "⚠️ WARNING", "unset code lens did not warn")
   assert_section(text, "Client features", "setup({ codelens = true })", "code-lens advice is missing")
+
+  -- Explicit true must warn the same way.
+  client.settings = { pico8 = { inlayHints = true, limits = { codeLens = true } } }
+  text = capture_health()
+  assert_section(text, "Client features", "pico8.limits.codeLens = true", "explicit code-lens value is missing")
+  assert_section(text, "Client features", "code lens client-side: disabled", "explicit code lens is not disabled")
+  assert_section(text, "Client features", "⚠️ WARNING", "explicit code lens did not warn")
+  assert_section(text, "Client features", "setup({ codelens = true })", "explicit code-lens advice is missing")
 
   client.settings = saved_settings
   pcall(vim.lsp.codelens.enable, true, { bufnr = cart_buf })
@@ -470,6 +595,36 @@ if vim.lsp.get_client_by_id(987654) ~= nil then
   fail("the mocked lua_ls client was started")
 end
 
+-- A split report uses the cart in the current tab, not the previous tab ------
+
+local other = tmp .. "/other.txt"
+write(other, { "not a cart" })
+vim.cmd("tabnew " .. vim.fn.fnameescape(other))
+vim.cmd("tabprevious")
+local split_text = capture_health_split()
+assert_section(split_text, "Running clients", "current buffer attached: yes", "split report lost the current cart")
+assert_section(split_text, "Client features", "pico8.inlayHints = true", "split report lost the cart features")
+assert_not_contains(
+  section(split_text, "Client features"),
+  "no pico8 cart is active",
+  "split report used the previous tab"
+)
+pcall(vim.cmd, "tabclose 2")
+
+-- Missing helper commands warn while the helper is enabled --------------------
+
+vim.api.nvim_del_user_command("Pico8OpenPng")
+text = capture_health()
+helper = section(text, "Helper")
+assert_contains(helper, "helper commands are missing", "missing helper command did not warn")
+assert_contains(helper, "Pico8OpenPng", "missing helper command name is absent")
+assert_contains(helper, "⚠️ WARNING", "missing helper command did not produce a warning")
+vim.api.nvim_create_user_command("Pico8OpenPng", function() end, {
+  nargs = "?",
+  complete = "file",
+  desc = "test stub",
+})
+
 -- A global set after setup warns instead of claiming the helper is disabled ----
 
 vim.g.pico_lsp_helper_disabled = 1
@@ -489,6 +644,19 @@ assert_contains(helper, "helper is disabled", "disabled helper is not reported")
 assert_contains(helper, "setup({ disable = true })", "disabled helper source is missing")
 assert_not_contains(helper, "helper commands are missing", "disabled helper warned about missing commands")
 assert_not_contains(helper, "⚠️ WARNING", "disabled helper produced a warning")
+
+-- A global read during setup is attributed to the global ----------------------
+
+vim.g.pico_lsp_helper_disabled = 1
+require("pico_lsp").setup()
+text = capture_health()
+helper = section(text, "Helper")
+assert_contains(
+  helper,
+  "helper is disabled by vim.g.pico_lsp_helper_disabled",
+  "global-before-setup disable source is missing"
+)
+vim.g.pico_lsp_helper_disabled = nil
 
 -- Cleanup ---------------------------------------------------------------------
 
