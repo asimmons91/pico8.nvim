@@ -278,8 +278,13 @@ end
 text = capture_health()
 assert_section(text, "Configuration", "missing", "missing shipped config was not reported")
 assert_section(text, "Configuration", "not on 'runtimepath'", "missing config advice is missing")
-vim.api.nvim_get_runtime_file = real_get_runtime_file
+
+vim.lsp.config._configs["pico_lsp"] = { settings = {} }
+text = capture_health()
+assert_section(text, "Configuration", "❌ ERROR", "partial config without cmd was not an error")
+assert_section(text, "Configuration", "cmd must be a non-empty list", "partial config cmd error is missing")
 vim.lsp.config._configs["pico_lsp"] = saved_user_config
+vim.api.nvim_get_runtime_file = real_get_runtime_file
 
 -- A malformed shipped config is a compile error, not a crash -----------------
 
