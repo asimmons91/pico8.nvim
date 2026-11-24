@@ -90,10 +90,11 @@ or `vim.g.pico_lsp_helper_disabled = 1`.
 
 Disabling detaches the cart-owned `.lua` attachments the helper created. A
 `pico_lsp` client you started yourself remains attached. A fresh disabled setup
-registers only `:Pico8Refresh`, which reports the disabled state; commands
-already registered by an earlier enabled setup also report it. Re-running setup
-while `pico_lsp` is already enabled keeps existing helper-managed and
-user-started clients attached.
+still registers `:Pico8Refresh` (which reports the disabled state) and the
+client-only `:Pico8ToggleInlayHints`, `:Pico8CartInfo`, and `:Pico8Tabs`
+commands. It clears cached cart data but does not suppress the shipped config's
+client-side display. Re-running setup while `pico_lsp` is already enabled keeps
+existing helper-managed and user-started clients attached.
 
 The `.p8` ftplugin sets PICO-8 comment options for carts:
 
@@ -103,7 +104,9 @@ setlocal commentstring=--\ %s
 ```
 
 PICO-8 comment settings for cart-owned `.lua` buffers, including `//`
-recognition and `b:pico8_cart`, are proposed in M29.
+recognition, are proposed in M29. M28 already sets `b:pico8_cart` to the owning
+cart URI on helper-managed includes; M29 adds the rest of the buffer-variable
+surface and the included-buffer settings.
 
 ## Read-only `.p8.png` carts
 
@@ -254,17 +257,34 @@ vim.lsp.codelens.refresh({ bufnr = bufnr })
 vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 ```
 
-A cached statusline API, `:Pico8CartInfo`, and `:Pico8Tabs` are proposed in
-M28. The current request is:
+A cached statusline API, `:Pico8CartInfo`, and `:Pico8Tabs` use the same data:
 
 ```lua
-vim.lsp.buf_request(0, "pico8/cartInfo", {
-  textDocument = { uri = vim.uri_from_bufnr(0) },
-}, function(err, result)
-  if err or not result then return end
-  print(("%d / %d tokens"):format(result.tokens, result.tokenLimit))
-end)
+local api = require("pico_lsp")
+
+api.cart_status()
+-- "4210/8192 tok · 27433/65535 ch · 12000/15616 zip"
+
+api.cart_status(0, { fields = { "tokens", "chars" } })
+api.cart_info()         -- full cached cartInfo table, or nil
+api.refresh_cart_info() -- asynchronous manual refresh
 ```
+
+The helper caches `pico8/cartInfo` after an attach, a save, `InsertLeave`, and a
+500 ms debounce after edits. Statusline functions only read the cache and never
+block on the server. The cache covers root carts, included `.lua` files, and
+decoded `.p8.png` virtual buffers. The compressed segment is omitted when
+`compressedStatus` is `unavailable`, as it is for standalone `.lua` carts.
+
+For lualine and dependency-free statusline recipes, see the
+[README](../README.md#cart-budget-statusline). The lualine recipe colors
+`compressedStatus` with `DiagnosticWarn`/`DiagnosticError`.
+
+`:Pico8CartInfo` requests a fresh value and notifies the budget plus compact
+per-file and per-include detail. `:Pico8Tabs` fetches fresh tab lines, opens
+`vim.ui.select`, and jumps within the current buffer. On an included `.lua`
+buffer it explains that tabs belong to the owning cart; on a decoded `.p8.png`
+buffer it jumps inside the virtual buffer.
 
 ## Commands
 
@@ -275,7 +295,7 @@ end)
 | `:Pico8InsertGlyph [name]` | Available |
 | `:Pico8Refresh` | Available |
 | `:Pico8ToggleInlayHints` | Available |
-| `:Pico8CartInfo`, `:Pico8Tabs` | Proposed (M28) |
+| `:Pico8CartInfo`, `:Pico8Tabs` | Available |
 | `:Pico8OpenCart` | Proposed (M29) |
 | `:checkhealth pico_lsp` | Proposed (M32) |
 | `:Pico8InstallParser` | Proposed (M34) |

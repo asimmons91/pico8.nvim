@@ -76,6 +76,23 @@ above.
   the cart buffer, or restart Neovim, to refresh.
 - Server-driven cross-file refresh belongs to M33.
 
+## Cart statusline is empty or stale
+
+- `require("pico_lsp").cart_status()` returns `nil` until the first
+  `pico8/cartInfo` response. It never blocks, so an empty component right after
+  attach is expected.
+- Confirm a `pico_lsp` client is attached to the cart or include buffer.
+- The cache refreshes after attach, saves, `InsertLeave`, and a 500 ms debounce
+  after edits. `require("pico_lsp").refresh_cart_info()` forces a refresh for an
+  attached buffer. `:Pico8Refresh` also refreshes the cart cache while the
+  helper is enabled; a disabled helper reports its state instead.
+- A standalone `.lua` cart omits the compressed segment because the server
+  reports `compressedStatus = "unavailable"`.
+- Lualine and plain statusline recipes are documentation only; the plugin does
+  not install a statusline plugin.
+- If `:Pico8CartInfo` reports `no cart found for this buffer`, check the cart
+  or `#include` ownership and the client root.
+
 ## PNG cart fails
 
 - Confirm the file is a valid PICO-8 `.p8.png` cart.

@@ -6,10 +6,11 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M27 is complete. The plugin ships native LSP configuration,
+**Status:** M28 is complete. The plugin ships native LSP configuration,
 cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
-with managed attachment and `:Pico8Refresh`, and client-side enabling for the
-cart budget code lens and inlay hints. M28–M32 and M34 are proposed; M33 (range
+with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
+budget code lens and inlay hints, and a cached cart budget statusline with
+`:Pico8CartInfo` and `:Pico8Tabs`. M29–M32 and M34 are proposed; M33 (range
 formatting, document links, and code-lens refresh) remains server work in
 `pico-lsp`.
 
@@ -125,8 +126,9 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
   glyph maps work for `.p8` carts.
 - Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - The P8SCII glyph picker is available through `:Pico8InsertGlyph`.
-- `pico8/cartInfo` is available through the documented request; the cached
-  statusline API is proposed in M28.
+- `pico8/cartInfo` is cached asynchronously and powers a statusline API,
+  `:Pico8CartInfo`, and `:Pico8Tabs`. Root carts, cart-owned includes, and
+  decoded `.p8.png` virtual buffers all show their owning cart's budget.
 
 ### Opt-in LSP features
 
@@ -164,6 +166,85 @@ vim.lsp.codelens.refresh({ bufnr = bufnr })
 vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 ```
 
+## Cart budget statusline
+
+The helper caches the server's `pico8/cartInfo` response and refreshes it after
+an attach, a save, `InsertLeave`, and a 500 ms debounce after cart or include
+edits. Root carts, cart-owned `.lua` includes, and decoded `.p8.png` virtual
+buffers all use the owning cart's entry.
+
+```lua
+local api = require("pico_lsp")
+
+api.cart_status()
+-- "4210/8192 tok · 27433/65535 ch · 12000/15616 zip"
+
+api.cart_status(0, { fields = { "tokens", "chars" } })
+-- "4210/8192 tok · 27433/65535 ch"
+
+api.cart_info()         -- full cartInfo table, or nil before the first response
+api.refresh_cart_info() -- asynchronous manual refresh; returns immediately
+```
+
+`cart_status` reads the cache only. It never sends a request or waits for the
+server, so it is safe on every redraw. It returns `nil` until the first
+response. Segments use exactly the server's integers; the compressed segment is
+omitted when `compressedStatus` is `unavailable`, as it is for standalone
+`.lua` carts. `cart_info` returns a copy of the server data; inspect
+`compressedStatus` there when a statusline plugin needs to color `warning` or
+`error` states.
+
+The statusline updates after the debounce, on `InsertLeave`, and on saves, not
+on every keystroke.
+
+### lualine
+
+Lualine is optional. This component colors the compressed budget through the
+normal diagnostic highlights:
+
+```lua
+local function pico8_cart()
+  return require("pico_lsp").cart_status() or ""
+end
+
+local function pico8_cart_color()
+  local info = require("pico_lsp").cart_info()
+  local status = info and info.compressedStatus
+  if status == "error" then
+    return "DiagnosticError"
+  elseif status == "warning" then
+    return "DiagnosticWarn"
+  end
+end
+
+require("lualine").setup({
+  sections = {
+    lualine_x = {
+      {
+        pico8_cart,
+        color = pico8_cart_color,
+        cond = function()
+          return require("pico_lsp").cart_status() ~= nil
+        end,
+      },
+      "filetype",
+    },
+  },
+})
+```
+
+### Plain statusline
+
+No statusline plugin is required. Use a global function so `v:lua` can call it:
+
+```lua
+function _G.Pico8CartStatus()
+  return require("pico_lsp").cart_status() or ""
+end
+
+vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
+```
+
 ## Commands
 
 | Command | Purpose |
@@ -173,8 +254,15 @@ vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 | `:Pico8InsertGlyph [name]` | Insert a P8SCII glyph or open the picker. |
 | `:Pico8Refresh` | Clear the include cache and rescan loaded buffers. |
 | `:Pico8ToggleInlayHints` | Toggle client-side inlay hints for the current buffer. |
-| `:Pico8CartInfo`, `:Pico8Tabs` | Proposed in M28. |
+| `:Pico8CartInfo` | Show the cart budget with per-file and per-include detail. |
+| `:Pico8Tabs` | Pick a code tab and place the cursor on its start line. |
 | `:checkhealth pico_lsp` | Proposed in M32. |
+
+`:Pico8CartInfo` requests a fresh value asynchronously and notifies the same
+summary plus compact file detail. `:Pico8Tabs` fetches fresh tab lines, opens
+`vim.ui.select`, and jumps within the current buffer. On an included `.lua`
+buffer it names the owning cart and does not switch buffers; on a decoded
+`.p8.png` buffer it jumps inside the virtual buffer.
 
 ## Configuration
 
@@ -221,9 +309,10 @@ PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 
 The tests create temporary carts and exercise config resolution, command-line
 overrides, cart and include roots, attachment without a shipped config, unsaved
-includes, managed detach, multiple carts, PNG opening, glyph insertion, and
-fallback behavior. The CI workflow checks out the server and builds a test
-binary on Neovim 0.11 and 0.12.
+includes, managed detach, multiple carts, PNG opening, glyph insertion, cached
+cart info and statusline text, include and PNG cart resolution, refresh
+debouncing and coalescing, the cart commands, and fallback behavior. The CI
+workflow checks out the server and builds a test binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

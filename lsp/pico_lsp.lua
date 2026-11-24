@@ -5,6 +5,11 @@
 --   vim.lsp.config("pico_lsp", { cmd = { "/path/to/pico-lsp" } })
 -- The server owns setting defaults; do not duplicate them here.
 
+-- Register the cached cartInfo statusline and cart commands for base-config
+-- users who never call require("pico_lsp").setup(). The module does not request
+-- anything until a pico_lsp client attaches.
+pcall(require, "pico_lsp.cart")
+
 local function command()
   local configured = vim.g.pico_lsp_cmd
   if type(configured) == "string" and configured ~= "" then

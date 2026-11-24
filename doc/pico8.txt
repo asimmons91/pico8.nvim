@@ -9,8 +9,9 @@ Call: >lua
     require("pico_lsp").setup()
 <
 The default setup enables the `pico_lsp` client for `pico8` buffers and starts
-the helper for cart-owned `.lua` files. The shipped config has no side effects
-on its own; it is loaded from `lsp/pico_lsp.lua` on 'runtimepath'.
+the helper for cart-owned `.lua` files. The shipped config is loaded from
+`lsp/pico_lsp.lua` on 'runtimepath'; loading it also registers the cached cart
+statusline module and its commands (see |pico8-statusline|).
 
 `.p8` buffers use the cart's directory as the workspace root, even outside a
 git repository. Carts in different directories use separate clients. Override
@@ -47,6 +48,33 @@ command falls back from `g:pico_lsp_cmd` to `$PICO_LSP_BIN` to `pico-lsp`.
 A lazy.nvim spec: >lua
     { "asimmons91/pico8.nvim", main = "pico_lsp", lazy = false, opts = {} }
 <
+
+==============================================================================
+STATUSLINE                                                 *pico8-statusline*
+
+The helper caches `pico8/cartInfo` for a root cart, an included `.lua` buffer,
+or a decoded `.p8.png` buffer: >lua
+    local api = require("pico_lsp")
+    api.cart_status()            -- cached text, or nil before the first response
+    api.cart_info()              -- full cached cartInfo table
+    api.refresh_cart_info()      -- asynchronous refresh
+<
+`cart_status()` only reads the cache and never blocks on the server. It updates
+after an attach, `:w`, `InsertLeave`, and a 500 ms edit debounce. The compressed
+segment is omitted when `compressedStatus` is `unavailable`, as it is for
+standalone `.lua` carts. Pass `{ fields = { "tokens", "chars" } }` to select
+segments.
+
+A dependency-free statusline example: >lua
+    function _G.Pico8CartStatus()
+      return require("pico_lsp").cart_status() or ""
+    end
+    vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
+<
+`cart_info().compressedStatus` is `ok`, `warning`, `error`, or `unavailable`.
+Statusline plugins can use it to color the component. A lualine recipe is in
+`README.md`.
+
 ==============================================================================
 COMMANDS                                                   *pico8-commands*
 
@@ -55,9 +83,13 @@ COMMANDS                                                   *pico8-commands*
 :Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
 :Pico8Refresh            Clear the include cache and rescan loaded buffers.
 :Pico8ToggleInlayHints   Toggle client-side inlay hints for this buffer.
+:Pico8CartInfo           Request and show the cart budget with file detail.
+:Pico8Tabs               Pick a code tab and jump to its start line.
 
-Proposed commands: `:Pico8CartInfo`, `:Pico8Tabs`, `:Pico8OpenCart`, and
-`:Pico8InstallParser`.
+`:Pico8Tabs` explains that tabs belong to the owning cart on an included `.lua`
+buffer, and jumps inside the virtual buffer for a decoded `.p8.png` cart.
+
+Proposed commands: `:Pico8OpenCart` and `:Pico8InstallParser`.
 
 ==============================================================================
 VARIABLES                                                 *pico8-variables*

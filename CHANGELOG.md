@@ -13,5 +13,8 @@
 - Complete M27: enable the cart budget code lens and inlay-hint display,
   add `codelens`/`inlay_hints` setup options, and add
   `:Pico8ToggleInlayHints` with Neovim 0.11/0.12 coverage.
+- Complete M28: cache `pico8/cartInfo` asynchronously, add `cart_info`,
+  `cart_status`, and `refresh_cart_info`, add `:Pico8CartInfo` and
+  `:Pico8Tabs`, and document lualine and plain statusline recipes.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.
