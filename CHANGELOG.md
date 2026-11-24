@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.1.0 - 2026-11-24
+## [0.1.0](https://github.com/asimmons91/pico8.nvim/releases/tag/v0.1.0) - 2026-11-24
 
 - Extract the existing Neovim client from `pico-lsp/editors/nvim`.
 - Add native `lsp/pico_lsp.lua` and lazy.nvim-friendly `setup`.

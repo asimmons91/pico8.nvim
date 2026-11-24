@@ -81,9 +81,10 @@ client source.
   both get the command, and macOS CI covers the build.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 - M36 (end-user onboarding, documentation, and release readiness) is complete:
-  it covers the tagged v0.1.0 release path, quickstart and demo cart, support
-  files, install paths, help, and documentation checks, and explicitly excludes
-  Mason and LazyVim publication (M35).
+  it covers the tagged v0.1.0 release, quickstart and demo cart, support files,
+  install paths, help, and documentation checks, and explicitly excludes Mason
+  and LazyVim publication (M35). The only unrun check is a manual PICO-8
+  runtime load; the demo is parsed by `pico-lsp`.
 
 ## Milestones
 

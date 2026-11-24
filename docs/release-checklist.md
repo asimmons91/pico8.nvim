@@ -11,7 +11,8 @@ end-user path. Replace the version placeholders with the release being cut.
 | Minimum `pico-lsp` | v1.8.1 |
 | Tested Neovim | 0.11.4, 0.12.6 |
 | Release date | 2026-11-24 |
-| Release manager | |
+| Release URL | https://github.com/asimmons91/pico8.nvim/releases/tag/v0.1.0 |
+| Release manager | asimmons91 |
 
 ## Automated checks
 
@@ -39,9 +40,9 @@ or server configuration.
 
 | Path | Neovim | Result | Notes |
 |---|---|---|---|
-| lazy.nvim pinned tag | 0.11.4 | Pass | Local sandbox tag; GitHub tag pending |
-| lazy.nvim pinned tag | 0.12.6 | Pass | Local sandbox tag; GitHub tag pending |
-| `vim.pack` pinned version | 0.12.6 | Pass | Local `file://` sandbox tag |
+| lazy.nvim pinned tag | 0.11.4 | Pass | Local sandbox tag |
+| lazy.nvim pinned tag | 0.12.6 | Pass | Published GitHub tag v0.1.0 |
+| `vim.pack` pinned version | 0.12.6 | Pass | Published GitHub tag v0.1.0 |
 | vanilla `runtimepath` + `setup()` | 0.11.4/0.12.6 | Pass | Headless suite |
 | manual `vim.lsp.config` fallback | 0.12.6 | Pass | Existing config/fallback tests |
 
@@ -87,7 +88,7 @@ manual run. Do not mark an unrun platform as passing.
 - [x] `docs/assets/onboarding.svg` was captured from a real headless Neovim
       0.12.5 screen with `examples/hello.p8` and `pico-lsp` v1.8.1.
 - [x] The image is referenced by the README and quickstart with alt text.
-- [ ] The quickstart works from the published release without cloning the
+- [x] The quickstart works from the published release without cloning the
       repository.
 - [x] `doc/pico8.txt` contains `*pico8-install*`, `*pico8-requirements*`, and
       `*pico8-options*`; `:help :Pico8OpenPng` resolves.
@@ -126,11 +127,12 @@ gh repo edit asimmons91/pico8.nvim \
   --add-topic lua --add-topic language-server --add-topic lsp
 ```
 
-- [ ] GitHub description mentions the Neovim client for `pico-lsp`.
-- [ ] Topics include at least `pico-8`, `pico8`, `neovim`, `lua`,
+- [x] GitHub description mentions the Neovim client for `pico-lsp`.
+- [x] Topics include at least `pico-8`, `pico8`, `neovim`, `lua`,
       `language-server`, and `lsp`.
-- [ ] A social preview is uploaded in the repository settings.
-- [ ] The README CI and release badges resolve.
+- [ ] A social preview is uploaded in the repository settings. This remains a
+      manual repository-settings step.
+- [x] The README CI and release badges resolve.
 
 ## Verification record
 
@@ -141,6 +143,7 @@ gh repo edit asimmons91/pico8.nvim \
 | 2026-11-24 | Linux amd64 | 0.12.6 | dev M33 build | Pass | `gq`/`gx` standard hooks |
 | 2026-11-24 | Linux amd64 | 0.12.5 | v1.8.1 | Pass | Demo cart, `gf`, include attach, terminal capture |
 | 2026-11-24 | Linux amd64 | 0.12.6 | v1.8.1 | Pass | Lazy/Vim.pack/vanilla sandbox installs; LuaLS recipe |
+| 2026-11-24 | GitHub v0.1.0 | 0.12.6 | v1.8.1 | Pass | Published lazy.nvim and vim.pack installs; badges 200 |
 
 CI is the source of truth for Neovim 0.12.6. Local 0.12.5 results do not claim
 0.12.6 coverage. A PICO-8 runtime load was not part of this verification pass;
