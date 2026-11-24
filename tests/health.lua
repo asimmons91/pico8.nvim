@@ -281,6 +281,17 @@ assert_section(text, "Configuration", "not on 'runtimepath'", "missing config ad
 vim.api.nvim_get_runtime_file = real_get_runtime_file
 vim.lsp.config._configs["pico_lsp"] = saved_user_config
 
+-- A malformed shipped config is a compile error, not a crash -----------------
+
+local bad_rtp = tmp .. "/bad-rtp"
+write(bad_rtp .. "/lsp/pico_lsp.lua", { "this is not valid lua" })
+local saved_rtp = vim.o.runtimepath
+vim.opt.runtimepath:prepend(bad_rtp)
+text = capture_health()
+assert_section(text, "Configuration", "❌ ERROR", "malformed shipped config was not an error")
+assert_section(text, "Configuration", "could not be compiled", "malformed config text is missing")
+vim.o.runtimepath = saved_rtp
+
 for _, name in ipairs({
   "Neovim",
   "Configuration",
@@ -387,6 +398,15 @@ assert_section(text, "Server binary", "❌ ERROR", "missing binary was not an er
 assert_section(text, "Server binary", "executable not found", "missing binary text is missing")
 assert_section(text, "Server binary", "go install", "missing binary has no install step")
 assert_section(text, "Server binary", "releases", "missing binary has no release pointer")
+local missing_client = clients(cart_buf)[1]
+if missing_client then
+  assert_section(
+    text,
+    "Server binary",
+    "client " .. missing_client.id .. " server version",
+    "missing binary hid the running client version"
+  )
+end
 vim.lsp.config("pico_lsp", { cmd = { binary } })
 
 -- Function-valued command is reported but never called ------------------------

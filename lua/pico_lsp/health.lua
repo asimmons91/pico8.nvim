@@ -136,6 +136,16 @@ local function get_config()
 
   local listed, runtime_files = pcall(vim.api.nvim_get_runtime_file, "lsp/pico_lsp.lua", true)
   local has_runtime = listed and type(runtime_files) == "table" and #runtime_files > 0
+  if has_runtime then
+    -- Compile all runtime copies without executing them. This keeps the check
+    -- read-only while still reporting a malformed lsp/pico_lsp.lua.
+    for _, path in ipairs(runtime_files) do
+      local loaded, compile_error = loadfile(path)
+      if not loaded then
+        return nil, "lsp/pico_lsp.lua could not be compiled: " .. tostring(compile_error)
+      end
+    end
+  end
 
   if type(user_config) == "table" then
     local config = vim.deepcopy(user_config)
@@ -538,6 +548,15 @@ local function check_configuration(config, config_error, cmd)
   end
 end
 
+local function report_running_client_versions()
+  for _, client in ipairs(get_clients()) do
+    local version = client.server_info and client.server_info.version
+    if type(version) == "string" and version ~= "" then
+      info(string.format("client %s server version: %s", tostring(client.id), version))
+    end
+  end
+end
+
 local function check_server_binary(cmd)
   if type(cmd) == "function" then
     info("cmd is a user-supplied function; skipping executable resolution and the --version probe")
@@ -573,6 +592,7 @@ local function check_server_binary(cmd)
         "See docs/install.md for the full installation steps.",
       }
     )
+    report_running_client_versions()
     return
   end
 
@@ -586,6 +606,7 @@ local function check_server_binary(cmd)
         "Rebuild or reinstall the binary, or update cmd/vim.g.pico_lsp_cmd/PICO_LSP_BIN.",
       }
     )
+    report_running_client_versions()
     return
   end
   info(string.format("executable: %s (executable=%d, readable=%d)", resolved, 1, 1))
