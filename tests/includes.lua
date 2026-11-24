@@ -568,6 +568,9 @@ assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8OpenPng on an open P
 assert_custom_png_options("Pico8OpenPng on an open PNG")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "Pico8OpenPng on an open PNG leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "Pico8OpenPng on an open PNG leaked an unnamed buffer")
+set_custom_png_options()
+vim.cmd("Pico8ReloadPng")
+assert_custom_png_options("Pico8ReloadPng on an open PNG")
 
 -- A :bdelete'd virtual buffer is fully restored when reopened ------------------
 
