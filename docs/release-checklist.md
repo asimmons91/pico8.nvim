@@ -115,6 +115,14 @@ manual run. Do not mark an unrun platform as passing.
 
 ## Repository metadata
 
+```sh
+gh repo edit asimmons91/pico8.nvim \
+  --description "Neovim client for pico-lsp, a PICO-8 language server" \
+  --homepage "https://github.com/asimmons91/pico-lsp" \
+  --add-topic pico-8 --add-topic pico8 --add-topic neovim \
+  --add-topic lua --add-topic language-server --add-topic lsp
+```
+
 - [ ] GitHub description mentions the Neovim client for `pico-lsp`.
 - [ ] Topics include at least `pico-8`, `pico8`, `neovim`, `lua`,
       `language-server`, and `lsp`.
