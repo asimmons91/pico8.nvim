@@ -243,6 +243,9 @@ end
 if not vim.deep_equal(side_effect_snapshot(), before_side_effects) then
   fail("health registered commands or autocmds")
 end
+if package.loaded["pico_lsp.cart"] ~= nil then
+  fail("health loaded the pico_lsp.cart module")
+end
 
 -- Tree-sitter parser status uses language.add's return value ------------------
 
