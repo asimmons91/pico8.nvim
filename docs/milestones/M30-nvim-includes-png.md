@@ -258,7 +258,8 @@ When `require("pico_lsp").setup()` enables the helper:
   overrides, virtual-buffer root resolution, direct `.p8.png` auto-open,
   source-buffer deletion, reload, command completion, invalid PNGs,
   client-start failure, and the disabled-helper path. It passed on Neovim
-  0.12.5 against a pico-lsp development build.
+  0.11.4 and 0.12.5 against a pico-lsp development build, and the full suite
+  passes in CI on Neovim 0.11 and 0.12.
 - The existing config, helper, correctness, include-buffer, features, cart, and
   fallback suites pass on the same setup.
 - Confirmed choices: `include` is buffer-local when empty, so a global value is

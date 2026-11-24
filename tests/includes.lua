@@ -189,6 +189,7 @@ assert_equal(includes.resolve('#include "sub\\\\back.lua"', directory), director
 assert_equal(includes.resolve("  lib.lua  ", directory), directory .. "/lib.lua", "padding should be trimmed")
 assert_equal(includes.resolve("/tmp/absolute.lua", directory), "/tmp/absolute.lua", "absolute paths should stay absolute")
 assert_equal(includes.resolve("", directory), "", "an empty target should be returned unchanged")
+assert_equal(includes.resolve("#include", directory), "#include", "a directive without a path should stay unchanged")
 if includes.target("#include") ~= nil then
   fail("a directive without a path parsed as a target")
 end
@@ -365,6 +366,62 @@ for _, notification in ipairs(failure_notifications) do
 end
 if not saw_start_error then
   fail("client-start failure did not report an error")
+end
+
+-- A start failure after a successful decode also removes the virtual buffer ----
+
+local post_png = tmp .. "/poststart/post.p8.png"
+vim.fn.mkdir(vim.fs.dirname(post_png), "p")
+if not vim.uv.fs_copyfile(png_fixture, post_png) then
+  fail("could not copy the post-decode PNG fixture")
+end
+local post_dir = vim.fs.dirname(post_png)
+local request_buf = vim.api.nvim_create_buf(false, true)
+local post_client_id = vim.lsp.start({
+  name = "pico_lsp",
+  cmd = { binary },
+  root_dir = post_dir,
+  filetypes = { "pico8" },
+}, { bufnr = request_buf })
+if not post_client_id then
+  fail("could not start a client for the post-decode failure test")
+end
+if not vim.wait(10000, function()
+  local client = vim.lsp.get_client_by_id(post_client_id)
+  return client and client.initialized
+end, 50) then
+  fail("the post-decode test client did not initialize")
+end
+local post_notifications = capture_notify(function()
+  vim.lsp.start = function()
+    return nil
+  end
+  local ok, err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(post_png))
+  vim.lsp.start = original_start
+  if not ok then
+    error(err)
+  end
+end)
+vim.lsp.start = original_start
+vim.api.nvim_buf_delete(request_buf, { force = true })
+local post_buf = vim.api.nvim_get_current_buf()
+assert_equal(buffer_name(post_buf), vim.fs.normalize(post_png), "post-decode start failure lost the source name")
+assert_equal(vim.bo[post_buf].buftype, "nofile", "post-decode start failure left a normal buffer")
+assert_equal(vim.bo[post_buf].modifiable, false, "post-decode start failure left a modifiable buffer")
+assert_equal(vim.api.nvim_buf_get_lines(post_buf, 0, -1, false)[1], "", "post-decode start failure left content")
+assert_equal(require("pico_lsp").png_buffers[post_buf], nil, "post-decode start failure tracked the buffer")
+assert_equal(#virtual_buffers(), 1, "post-decode start failure left a virtual buffer")
+local saw_post_error = false
+for _, notification in ipairs(post_notifications) do
+  if
+    notification.level == vim.log.levels.ERROR
+    and notification.message:find("could not attach", 1, true) ~= nil
+  then
+    saw_post_error = true
+  end
+end
+if not saw_post_error then
+  fail("post-decode start failure did not report the attach error")
 end
 
 -- A disabled helper installs no PNG autocmd ------------------------------------

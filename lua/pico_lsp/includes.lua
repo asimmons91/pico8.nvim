@@ -74,7 +74,13 @@ function M.resolve(target, directory)
   if type(target) ~= "string" then
     return target
   end
-  local value = M.target(target) or target
+  local parsed = M.target(target)
+  if parsed == nil and target:match("^%s*#include") then
+    -- A directive without a usable path: leave the original text alone so
+    -- Neovim reports its normal missing-file error.
+    return target
+  end
+  local value = parsed or target
   value = vim.trim(value)
   local quoted = value:match('^"([^"]*)"') or value:match("^'([^']*)'")
   if quoted ~= nil then
