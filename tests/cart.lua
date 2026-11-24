@@ -479,6 +479,7 @@ end, "the debounced request did not update the cache")
 
 -- Moving an include to another cart in the same root must not corrupt either
 -- cart's cache or leave the include on the old owner.
+do
 local project_owner = tmp .. "/owner"
 local owner_a = project_owner .. "/a.p8"
 local owner_b = project_owner .. "/b.p8"
@@ -588,9 +589,11 @@ local owner_fake_after = api().cart_info(owner_lib_buf)
 if not owner_fake_after or owner_fake_after.rootUri ~= owner_b_uri then
   fail("an old-owner response was accepted under the new owner")
 end
+end
 
 -- A user-started client on an include has no b:pico8_cart. The first response
 -- re-keys to the cart; later responses must keep updating the same cache entry.
+do
 local project_user = tmp .. "/user-include"
 local user_cart = project_user .. "/cart.p8"
 local user_lib = project_user .. "/lib.lua"
@@ -624,9 +627,58 @@ fire_text_changed(user_lib_buf)
 wait_for(function()
   return api().cart_info(user_lib_buf).tokens > user_tokens_before
 end, "a user-started include refresh was rejected after re-keying")
+end
+
+-- A queued command callback must survive an ownership sweep while the first
+-- include response is still in flight.
+do
+local project_pending = tmp .. "/pending"
+local pending_cart = project_pending .. "/cart.p8"
+local pending_lib = project_pending .. "/lib.lua"
+write(pending_cart, cart_lines({ '#include "lib.lua"', "pending_value = 1" }))
+write(pending_lib, { "function pending_lib() end" })
+local pending_cart_buf = edit(pending_cart)
+wait_for(function()
+  return api().cart_info(pending_cart_buf) ~= nil
+end, "the pending-callback cart cache did not populate")
+local pending_client = clients(pending_cart_buf)[1]
+local restore_pending = patch_request(pending_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  return original(self, method, params, function(err, result)
+    vim.defer_fn(function()
+      handler(err, result)
+    end, 300)
+  end, bufnr)
+end)
+local pending_lib_buf = edit(pending_lib)
+wait_for(function()
+  return #clients(pending_lib_buf) > 0
+end, "the pending-callback include did not attach")
+local pending_notifications, restore_pending_notify = start_notify_capture()
+vim.cmd("Pico8CartInfo")
+vim.cmd("Pico8Refresh")
+local pending_summary
+wait_for(function()
+  for _, notification in ipairs(pending_notifications) do
+    if notification.message:find("tokens", 1, true) then
+      pending_summary = notification.message
+      return true
+    end
+  end
+  return false
+end, "an ownership sweep dropped a queued cart command", 6000)
+restore_pending_notify()
+restore_pending()
+if not pending_summary:find(pending_cart, 1, true) then
+  fail("the surviving command summary is missing the cart path: " .. pending_summary)
+end
+end
 
 -- A slow, older include response must not overwrite a newer cart cache after
 -- both buffers re-key into the same root.
+do
 local project_order = tmp .. "/order"
 local order_cart = project_order .. "/cart.p8"
 local order_lib = project_order .. "/lib.lua"
@@ -684,9 +736,10 @@ wait_for(function()
   local info = api().cart_info(order_lib_buf)
   return info ~= nil and info.tokens == order_newer_tokens
 end, "the include did not read the newer cart cache")
+end
 
 -- A standalone .lua cart omits the compressed segment ----------------------------
-
+do
 local project_lua = tmp .. "/standalone"
 local standalone = project_lua .. "/main.lua"
 write(standalone, { "print('standalone')" })
@@ -738,6 +791,7 @@ end
 wait_for(function()
   return vim.api.nvim_win_get_cursor(0)[1] == 1
 end, "Pico8Tabs did not jump to the standalone .lua tab")
+end
 
 -- :Pico8CartInfo ---------------------------------------------------------------
 

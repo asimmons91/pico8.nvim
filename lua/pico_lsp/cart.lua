@@ -694,9 +694,9 @@ function M.detach(client_id, bufnr)
 end
 
 -- The helper revalidated a Lua buffer onto a different owning cart, or off a
--- cart entirely, without detaching its client. Drop the old root mapping and
--- refresh under the new owner (or the buffer's own root) so it never shows a
--- stale cart's budget.
+-- cart entirely. Schedule a refresh; the response re-keys the buffer under its
+-- new owner. Do not unmap first: an in-flight request or queued command
+-- callback must survive the ownership sweep.
 local function schedule_owner_refresh(bufnr)
   local expected_epoch = epoch
   vim.schedule(function()
@@ -720,26 +720,17 @@ function M.owner_changed(bufnr, new_uri)
   end
   local key = buffer_roots[bufnr]
   local owner_missing = type(new_uri) ~= "string" or new_uri == ""
-  local changed = not key or owner_missing or not same_uri(key, new_uri)
   if owner_missing then
-    -- No owning cart: if the cache is already keyed by the buffer's own URI it
-    -- is a standalone .lua cart and needs no work.
+    -- A buffer already keyed by its own URI is a standalone .lua cart.
     if key and same_uri(key, document_uri(bufnr)) then
       return
-    end
-    if changed then
-      unmark_buffer(bufnr)
     end
     schedule_owner_refresh(bufnr)
     return
   end
-  if changed then
-    unmark_buffer(bufnr)
-  end
-  local state = root_state[new_uri]
-  if state and state.info then
-    mark_buffer(bufnr, new_uri, client.id)
-    if not changed then
+  if key and same_uri(key, new_uri) then
+    local state = root_state[key]
+    if state and state.info then
       return
     end
   end
