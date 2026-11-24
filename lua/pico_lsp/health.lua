@@ -894,8 +894,11 @@ end
 local function check_helper(cmd)
   local loaded = package.loaded["pico_lsp"]
   local setup_ran = type(loaded) == "table" and loaded.did_setup == true
+  local setup_disabled = type(loaded) == "table" and loaded.disabled == true
   local disabled_global = vim.g.pico_lsp_helper_disabled == 1
-  local disabled = disabled_global or (type(loaded) == "table" and loaded.disabled == true)
+  -- The global is read by setup(), not watched at runtime. Report the effective
+  -- state and flag a global that was set after the last setup.
+  local disabled = setup_disabled or (not setup_ran and disabled_global)
 
   if setup_ran then
     info("require('pico_lsp').setup() has run")
@@ -908,7 +911,12 @@ local function check_helper(cmd)
   if disabled then
     info(
       "helper is disabled"
-        .. (disabled_global and " by vim.g.pico_lsp_helper_disabled" or " by setup({ disable = true })")
+        .. (setup_disabled and " by setup({ disable = true })" or " by vim.g.pico_lsp_helper_disabled")
+    )
+  elseif setup_ran and disabled_global then
+    warn(
+      "vim.g.pico_lsp_helper_disabled is set, but the helper is still active because setup has not run since the change",
+      "Re-run require('pico_lsp').setup() to apply the disable."
     )
   elseif setup_ran then
     ok("helper is enabled")

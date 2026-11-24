@@ -468,6 +468,16 @@ if vim.lsp.get_client_by_id(987654) ~= nil then
   fail("the mocked lua_ls client was started")
 end
 
+-- A global set after setup warns instead of claiming the helper is disabled ----
+
+vim.g.pico_lsp_helper_disabled = 1
+text = capture_health()
+local stale_helper = section(text, "Helper")
+assert_contains(stale_helper, "still active", "stale helper-disabled global is not reported")
+assert_contains(stale_helper, "⚠️ WARNING", "stale helper-disabled global did not warn")
+assert_not_contains(stale_helper, "helper is disabled", "stale global claimed the helper was disabled")
+vim.g.pico_lsp_helper_disabled = nil
+
 -- Disabled helper does not warn about missing commands -----------------------
 
 require("pico_lsp").setup({ disable = true })
