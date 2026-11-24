@@ -352,14 +352,14 @@ local function rekey_state(state, old_key, new_key, bufnr, client_id)
   return state, new_key
 end
 
-local function finish_callbacks(state, generation, result, err)
+local function finish_callbacks(state, generation, result, err, bufnr)
   -- Snapshot the list: a callback may start another refresh, which appends to
   -- state.callbacks while this loop is running.
   local callbacks = state.callbacks or {}
   state.callbacks = {}
   local remaining = {}
   for _, callback in ipairs(callbacks) do
-    if callback.gen <= generation then
+    if callback.gen <= generation and (bufnr == nil or callback.bufnr == bufnr) then
       local ok, callback_err = pcall(callback.fn, result, err)
       if not ok then
         log_debug("pico-lsp: cart info callback failed: " .. tostring(callback_err))
@@ -371,6 +371,28 @@ local function finish_callbacks(state, generation, result, err)
   for _, callback in ipairs(remaining) do
     state.callbacks[#state.callbacks + 1] = callback
   end
+end
+
+-- Remove the queued callbacks that belong to one buffer. Used when an
+-- ownership change moves that buffer off a shared root: the old root's other
+-- buffers keep their callbacks, and the moving buffer's callbacks are answered
+-- by its new-owner refresh.
+local function take_buffer_callbacks(key, bufnr)
+  local state = root_state[key]
+  if not state then
+    return {}
+  end
+  local remaining = {}
+  local moved = {}
+  for _, callback in ipairs(state.callbacks) do
+    if callback.bufnr == bufnr then
+      moved[#moved + 1] = callback.fn
+    else
+      remaining[#remaining + 1] = callback
+    end
+  end
+  state.callbacks = remaining
+  return moved
 end
 
 local function discard_state(state, message)
@@ -390,9 +412,9 @@ local function send_pending_if_ready(state, key)
   end
 end
 
-local function discard_response(state, key, generation, message)
+local function discard_response(state, key, generation, message, bufnr)
   log_debug("pico-lsp: discarding cart info response: " .. message)
-  finish_callbacks(state, generation, nil, message)
+  finish_callbacks(state, generation, nil, message, bufnr)
   send_pending_if_ready(state, key)
 end
 
@@ -464,13 +486,14 @@ send_request = function(state, key)
           state,
           key,
           generation,
-          "the pico_lsp client detached before the cart info request completed"
+          "the pico_lsp client detached before the cart info request completed",
+          bufnr
         )
         return
       end
       local message = "pico8/cartInfo timed out"
       record_error(key, message)
-      finish_callbacks(state, generation, nil, message)
+      finish_callbacks(state, generation, nil, message, bufnr)
       send_pending_if_ready(state, key)
     end))
     if not started then
@@ -498,7 +521,7 @@ send_request = function(state, key)
     state.inflight = false
     local message = sent_ok and "pico8/cartInfo request was not sent" or tostring(sent)
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message)
+    finish_callbacks(state, generation, nil, message, bufnr)
     send_pending_if_ready(state, key)
   end
 end
@@ -525,7 +548,13 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   -- Check buffer/client liveness before even an error response: a request for a
   -- buffer that closed or detached must be discarded, not recorded for health.
   if not valid_buffer(bufnr) then
-    discard_response(state, key, generation, "the buffer closed before the cart info response arrived")
+    discard_response(
+      state,
+      key,
+      generation,
+      "the buffer closed before the cart info response arrived",
+      bufnr
+    )
     return
   end
   local current_client = client_for(bufnr)
@@ -542,7 +571,8 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
       state,
       key,
       generation,
-      "the pico_lsp client detached before the cart info response arrived"
+      "the pico_lsp client detached before the cart info response arrived",
+      bufnr
     )
     return
   end
@@ -551,7 +581,7 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   if err then
     message = error_message(err)
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message)
+    finish_callbacks(state, generation, nil, message, bufnr)
     send_pending_if_ready(state, key)
     return
   end
@@ -559,21 +589,21 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   if type(result) ~= "table" or type(result.rootUri) ~= "string" or result.rootUri == "" then
     message = "invalid pico8/cartInfo response"
     record_error(key, message)
-    finish_callbacks(state, generation, nil, message)
+    finish_callbacks(state, generation, nil, message, bufnr)
     send_pending_if_ready(state, key)
     return
   end
 
   local helper_owner = vim.b[bufnr].pico8_cart
   if type(helper_owner) == "string" and helper_owner ~= "" and not same_uri(result.rootUri, helper_owner) then
-    discard_response(state, key, generation, "the include moved to a different owning cart")
+    discard_response(state, key, generation, "the include moved to a different owning cart", bufnr)
     return
   end
 
   -- Answer callbacks before the rekey so callbacks for this generation see the
   -- fresh value; newer callbacks move with the state and are answered by its
   -- pending request.
-  finish_callbacks(state, generation, result, nil)
+  finish_callbacks(state, generation, result, nil, bufnr)
 
   local target_state = state
   local target_key = key
@@ -612,7 +642,7 @@ local function request_cart_info(bufnr, client, callback)
   state.request_uri = uri
   state.client_id = client.id
   if callback then
-    state.callbacks[#state.callbacks + 1] = { gen = generation, fn = callback }
+    state.callbacks[#state.callbacks + 1] = { gen = generation, fn = callback, bufnr = bufnr }
   end
   mark_buffer(bufnr, key, client.id)
   if state.inflight then
@@ -714,15 +744,31 @@ end
 -- buffer first so its refresh cannot steal the old cart's response or queued
 -- command callbacks. A sole/provisional state stays in place so its callbacks
 -- survive and its response rekeys.
-local function schedule_owner_refresh(bufnr)
+local function schedule_owner_refresh(bufnr, callbacks)
   local expected_epoch = epoch
   vim.schedule(function()
-    if expected_epoch ~= epoch then
+    if expected_epoch ~= epoch or not valid_buffer(bufnr) then
       return
     end
-    if valid_buffer(bufnr) then
-      M.refresh_cart_info(bufnr)
+    if callbacks and #callbacks > 0 then
+      local client = client_for(bufnr)
+      if client then
+        request_cart_info(bufnr, client, function(result, err)
+          for _, callback in ipairs(callbacks) do
+            local ok, callback_err = pcall(callback, result, err)
+            if not ok then
+              log_debug("pico-lsp: cart info callback failed: " .. tostring(callback_err))
+            end
+          end
+        end)
+        return
+      end
+      for _, callback in ipairs(callbacks) do
+        pcall(callback, nil, "no pico_lsp client attached to this buffer")
+      end
+      return
     end
+    M.refresh_cart_info(bufnr)
   end)
 end
 
@@ -753,7 +799,10 @@ function M.owner_changed(bufnr, new_uri)
     return
   end
   if key and changed and root_buffer_count(key) > 1 then
+    local moved = take_buffer_callbacks(key, bufnr)
     unmark_buffer(bufnr)
+    schedule_owner_refresh(bufnr, moved)
+    return
   end
   schedule_owner_refresh(bufnr)
 end

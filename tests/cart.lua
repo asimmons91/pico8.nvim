@@ -1460,7 +1460,6 @@ require("pico_lsp").setup()
 wait_for(function()
   return api().cart_info(uo_lib_buf) ~= nil and vim.b[uo_lib_buf].pico8_cart == nil
 end, "the enabled helper claimed or lost the user-owned include")
-edit(uo_a)
 local uo_client = clients(uo_a_buf)[1]
 local restore_uo_patch = patch_request(uo_client, function(original, self, method, params, handler, bufnr)
   if method ~= "pico8/cartInfo" then
@@ -1472,24 +1471,36 @@ local restore_uo_patch = patch_request(uo_client, function(original, self, metho
     end, 400)
   end, bufnr)
 end)
+edit(uo_lib)
 local uo_notifications, restore_uo_notify = start_notify_capture()
+vim.cmd("Pico8CartInfo")
+edit(uo_a)
 vim.cmd("Pico8CartInfo")
 vim.api.nvim_buf_set_lines(uo_a_buf, 0, -1, false, cart_lines({ "uo_a = 1" }))
 vim.cmd("silent write")
-local uo_summary
+local uo_summaries = {}
 wait_for(function()
+  uo_summaries = {}
   for _, notification in ipairs(uo_notifications) do
     if notification.message:find("tokens", 1, true) then
-      uo_summary = notification.message
-      return true
+      uo_summaries[#uo_summaries + 1] = notification.message
     end
   end
-  return false
-end, "the user-owner cart command was dropped or misrouted", 8000)
+  return #uo_summaries >= 2
+end, "both user-owner commands did not report after the move", 8000)
 restore_uo_notify()
 restore_uo_patch()
-if not uo_summary:find(uo_a, 1, true) then
-  fail("the user-owner command reported the wrong cart: " .. uo_summary)
+local uo_saw_a, uo_saw_b = false, false
+for _, summary in ipairs(uo_summaries) do
+  if summary:find(uo_a, 1, true) then
+    uo_saw_a = true
+  end
+  if summary:find(uo_b, 1, true) then
+    uo_saw_b = true
+  end
+end
+if not uo_saw_a or not uo_saw_b then
+  fail("user-owner commands reported the wrong carts: " .. vim.inspect(uo_summaries))
 end
 wait_for(function()
   local info = api().cart_info(uo_lib_buf)
