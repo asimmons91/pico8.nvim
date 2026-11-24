@@ -29,8 +29,8 @@ Run these before tagging.
       M33 (`v1.8.2-0.20261124204614-a51e75329238`), so `gq` and Neovim 0.12
       `gx` have coverage. The v1.8.1 release predates M33 and skips those
       checks.
-- [ ] The documentation job is green on the release commit.
-- [ ] The Neovim test jobs are green on the release commit.
+- [x] The documentation job is green on the release commit.
+- [x] The Neovim test jobs are green on the release commit.
 
 ## Clean install matrix
 
