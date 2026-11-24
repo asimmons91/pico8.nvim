@@ -227,6 +227,12 @@ still does not manage it, `:Pico8OpenCart` reports no owner, and the compressed
 budget segment is usually `unavailable`. `:Pico8Tabs` treats the buffer as a
 single `main` tab.
 
+The file initially opens as `lua`, so `lua_ls` may attach before you switch the
+filetype. Check `:lua =vim.lsp.get_clients({ bufnr = 0 })`; if both clients are
+present, detach `lua_ls` with `vim.lsp.buf_detach_client` or scope it away for
+that project. The include-aware recipe does not detect standalone `.lua` carts
+because they are not listed by a `.p8` cart.
+
 Standalone `.lua` carts are not detected automatically. If the manual path does
 not behave as expected, use a text `.p8` cart for full cart-aware analysis.
 

@@ -113,6 +113,9 @@ executables are errors.
   `lua_ls` for unrelated Lua files.
 - The `pico8.attachLua` setting is a VS Code extension setting; it does not
   control the Neovim helper.
+- A standalone `.lua` cart initially opens as `lua`, so `lua_ls` may already be
+  attached before you switch to `filetype=pico8`. Detach it with
+  `vim.lsp.buf_detach_client` or scope it away for that project.
 
 ## An include stays attached after removal
 
