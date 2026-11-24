@@ -225,10 +225,10 @@ Requirements:
 - `tests/include_buffers.lua`, run by `tests/run.sh`, covers stock PICO-8
   comment application, `gcc`, `gq` continuation of `//` blocks, buffer
   variables, glyph-map exclusion, `:Pico8OpenCart` on includes/carts/PNG/
-  unrelated buffers with spaces in paths, stock and empty restore, custom
-  values, user changes after attach, same-root ownership changes, and the
-  disabled helper path. It passed on Neovim 0.12.5 against a pico-lsp
-  development build.
+  unrelated buffers with spaces in paths, stock and empty restore, per-option
+  custom values, already-PICO-8 values, user changes after attach, same-root
+  ownership changes, and the disabled helper path. It passed on Neovim 0.12.5
+  against a pico-lsp development build.
 - The existing config, helper, correctness, features, cart, and fallback
   suites pass on the same setup.
 - Confirmed choices: comment defaults apply per option; exact PICO-8 values are

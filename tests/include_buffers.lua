@@ -126,6 +126,8 @@ write(lib, { "function lib() end", "", "local value = 1" })
 
 local cart_buf = edit(cart)
 wait_attached(cart_buf, "pico-lsp did not attach to the cart")
+assert_equal(vim.b[cart_buf].pico8_cart, nil, "a root cart has b:pico8_cart")
+assert_equal(vim.b[cart_buf].pico8_cart_root, nil, "a root cart has b:pico8_cart_root")
 
 local lib_buf = edit(lib)
 wait_attached(lib_buf, "the helper did not attach the included .lua buffer")
@@ -220,6 +222,22 @@ if vim.fn.filereadable(png_fixture) == 1 then
   assert_contains(png_notifications[1].message, "already a PICO-8 cart", "the PNG-buffer message")
   vim.cmd("bwipeout! " .. png_buf)
 end
+
+-- A failed :edit leaves the include current and reports a normal error --------
+
+edit(lib)
+wait_attached(lib_buf, "the include did not reattach before the failed-open test")
+local original_hidden = vim.o.hidden
+vim.o.hidden = false
+vim.api.nvim_buf_set_lines(lib_buf, 0, 0, false, { "-- unsaved change" })
+local open_ok = pcall(vim.cmd, "Pico8OpenCart")
+vim.o.hidden = original_hidden
+vim.bo[lib_buf].modified = false
+edit(lib)
+if open_ok then
+  fail("Pico8OpenCart succeeded with a modified include and hidden off")
+end
+assert_equal(buffer_name(vim.api.nvim_get_current_buf()), vim.fs.normalize(lib), "a failed Pico8OpenCart changed buffers")
 
 -- Managed detach restores stock values and clears the variables ---------------
 
