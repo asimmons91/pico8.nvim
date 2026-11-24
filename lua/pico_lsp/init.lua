@@ -1252,6 +1252,9 @@ function M.setup(opts)
       local record = bufnr and managed[bufnr]
       if record and record.client_id == data.client_id then
         managed[bufnr] = nil
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          vim.b[bufnr].pico8_cart = nil
+        end
       end
       if bufnr then
         forget_marker(bufnr, data.client_id)

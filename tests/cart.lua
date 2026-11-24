@@ -240,9 +240,42 @@ if not default_info or default_info.rootUri ~= base_info.rootUri then
   fail("cart_info() did not use the current buffer")
 end
 assert_same(api().cart_status(), api().cart_status(base_buf), "default cart_status")
-if not pcall(api().refresh_cart_info) then
-  fail("refresh_cart_info() without a buffer errored")
+local no_arg_client = clients(base_buf)[1]
+local no_arg_calls = 0
+local restore_no_arg = patch_request(no_arg_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" then
+    no_arg_calls = no_arg_calls + 1
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+api().refresh_cart_info()
+wait_for(function()
+  return no_arg_calls > 0
+end, "refresh_cart_info() did not refresh the current buffer")
+restore_no_arg()
+
+-- A client can be attached while the first response is still outstanding; the
+-- cache must stay nil rather than showing placeholder zeros.
+cart().shutdown()
+local delayed_client = clients(base_buf)[1]
+local restore_delayed = patch_request(delayed_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  return original(self, method, params, function(err, result)
+    vim.defer_fn(function()
+      handler(err, result)
+    end, 300)
+  end, bufnr)
+end)
+api().refresh_cart_info(base_buf)
+if api().cart_status(base_buf) ~= nil then
+  fail("cart_status returned placeholder data before the first response")
 end
+wait_for(function()
+  return api().cart_info(base_buf) ~= nil
+end, "the delayed first response did not populate the cache")
+restore_delayed()
 
 -- The public info table must not be the cache itself.
 local mutable = api().cart_info(base_buf)
@@ -384,6 +417,17 @@ wait_for(function()
   return api().cart_info(include_cart_buf).tokens > save_tokens_before
 end, "saving a cart did not refresh the cache")
 
+-- Saving an included .lua file also refreshes the owning cart immediately.
+edit(include_lib)
+local include_save_tokens_before = api().cart_info(include_cart_buf).tokens
+vim.api.nvim_buf_set_lines(include_lib_buf, -1, -1, false, {
+  "function lib_saved_on_disk() return 13579 end",
+})
+vim.cmd("silent write")
+wait_for(function()
+  return api().cart_info(include_cart_buf).tokens > include_save_tokens_before
+end, "saving an included .lua file did not refresh the cache")
+
 -- InsertLeave refreshes the current attached buffer.
 edit(include_lib)
 local insert_leave_tokens_before = api().cart_info(include_cart_buf).tokens
@@ -462,15 +506,20 @@ end
 -- the owner. The old A response must not move the include back to A.
 local owner_lib_client = clients(owner_lib_buf)[1]
 local owner_calls = 0
+local owner_stale_done = false
 local restore_owner = patch_request(owner_lib_client, function(original, self, method, params, handler, bufnr)
   if method ~= "pico8/cartInfo" then
     return original(self, method, params, handler, bufnr)
   end
   owner_calls = owner_calls + 1
-  local delay = owner_calls == 1 and 500 or 50
+  local call = owner_calls
+  local delay = call == 1 and 500 or 50
   return original(self, method, params, function(err, result)
     vim.defer_fn(function()
       handler(err, result)
+      if call == 1 then
+        owner_stale_done = true
+      end
     end, delay)
   end, bufnr)
 end)
@@ -488,7 +537,10 @@ wait_for(function()
   return info ~= nil and info.rootUri == owner_b_uri
 end, "the cart cache did not follow the new owner")
 -- Let the delayed old-owner response arrive.
-vim.wait(700, function()
+wait_for(function()
+  return owner_stale_done
+end, "the delayed old-owner response did not run", 4000)
+vim.wait(100, function()
   return false
 end)
 restore_owner()
@@ -540,6 +592,66 @@ fire_text_changed(user_lib_buf)
 wait_for(function()
   return api().cart_info(user_lib_buf).tokens > user_tokens_before
 end, "a user-started include refresh was rejected after re-keying")
+
+-- A slow, older include response must not overwrite a newer cart cache after
+-- both buffers re-key into the same root.
+local project_order = tmp .. "/order"
+local order_cart = project_order .. "/cart.p8"
+local order_lib = project_order .. "/lib.lua"
+write(order_cart, cart_lines({ '#include "lib.lua"', "order_value = 1" }))
+write(order_lib, { "function order_lib() end" })
+local order_cart_buf = edit(order_cart)
+wait_for(function()
+  return api().cart_info(order_cart_buf) ~= nil
+end, "the ordering cart cache did not populate")
+local order_baseline = api().cart_info(order_cart_buf)
+local order_client = clients(order_cart_buf)[1]
+local order_calls = 0
+local order_stale_done = false
+local restore_order = patch_request(order_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  order_calls = order_calls + 1
+  local call = order_calls
+  if call == 1 then
+    return original(self, method, params, function(err, result)
+      vim.defer_fn(function()
+        handler(err, result)
+        order_stale_done = true
+      end, 1200)
+    end, bufnr)
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+local order_lib_buf = edit(order_lib)
+wait_for(function()
+  return #clients(order_lib_buf) > 0
+end, "the ordering include did not attach")
+edit(order_cart)
+vim.api.nvim_buf_set_lines(order_cart_buf, -1, -1, false, {
+  "local order_newer_expression = 'a newer cart value that must survive'",
+})
+fire_text_changed(order_cart_buf)
+wait_for(function()
+  local info = api().cart_info(order_cart_buf)
+  return info ~= nil and info.tokens > order_baseline.tokens
+end, "the newer cart refresh did not apply")
+local order_newer_tokens = api().cart_info(order_cart_buf).tokens
+wait_for(function()
+  return order_stale_done
+end, "the slow include response did not run", 4000)
+vim.wait(100, function()
+  return false
+end)
+restore_order()
+if api().cart_info(order_cart_buf).tokens ~= order_newer_tokens then
+  fail("an older include response overwrote the newer cart cache")
+end
+wait_for(function()
+  local info = api().cart_info(order_lib_buf)
+  return info ~= nil and info.tokens == order_newer_tokens
+end, "the include did not read the newer cart cache")
 
 -- A standalone .lua cart omits the compressed segment ----------------------------
 
@@ -1076,11 +1188,13 @@ wait_for(function()
   return #clients(include_lib_buf) > 0 and api().cart_info(include_lib_buf) ~= nil
 end, "the include did not reattach before the late-response test")
 local late_client = clients(include_lib_buf)[1]
+local late_response_done = false
 local restore_late = patch_request(late_client, function(original, self, method, params, handler, bufnr)
   if method == "pico8/cartInfo" then
     return original(self, method, params, function(err, result)
       vim.defer_fn(function()
         handler(err, result)
+        late_response_done = true
       end, 300)
     end, bufnr)
   end
@@ -1088,12 +1202,24 @@ local restore_late = patch_request(late_client, function(original, self, method,
 end)
 api().refresh_cart_info(include_lib_buf)
 vim.lsp.buf_detach_client(include_lib_buf, late_client.id)
-vim.wait(600, function()
+wait_for(function()
+  return vim.b[include_lib_buf].pico8_cart == nil
+end, "the helper did not clear b:pico8_cart on detach")
+if api().cart_info(include_cart_buf) == nil then
+  fail("detaching the include cleared the owning cart cache")
+end
+wait_for(function()
+  return late_response_done
+end, "the delayed late response did not run", 4000)
+vim.wait(100, function()
   return false
 end)
 restore_late()
 if api().cart_info(include_lib_buf) ~= nil then
   fail("a late response resurrected a detached include cache")
+end
+if api().cart_info(include_cart_buf) == nil then
+  fail("the late response cleared the owning cart cache")
 end
 if #clients(include_lib_buf) ~= 0 then
   fail("the late-response test left the include client attached")
@@ -1103,6 +1229,33 @@ edit(include_lib)
 wait_for(function()
   return #clients(include_lib_buf) > 0 and api().cart_info(include_lib_buf) ~= nil
 end, "the include did not reattach after the late-response test")
+
+-- A response for a wiped buffer must be discarded without touching vim.b.
+local wipe_late_client = clients(include_lib_buf)[1]
+local wipe_late_done = false
+local restore_wipe_late = patch_request(wipe_late_client, function(original, self, method, params, handler, bufnr)
+  if method == "pico8/cartInfo" then
+    return original(self, method, params, function(err, result)
+      vim.defer_fn(function()
+        handler(err, result)
+        wipe_late_done = true
+      end, 300)
+    end, bufnr)
+  end
+  return original(self, method, params, handler, bufnr)
+end)
+api().refresh_cart_info(include_lib_buf)
+vim.cmd("bwipeout! " .. include_lib_buf)
+wait_for(function()
+  return wipe_late_done
+end, "the wiped-buffer late response did not run", 4000)
+vim.wait(100, function()
+  return false
+end)
+restore_wipe_late()
+if api().cart_info(include_cart_buf) == nil then
+  fail("wiping an include cleared the owning cart cache")
+end
 
 local wipe_buf = edit(tabs_cart)
 wait_for(function()
@@ -1115,7 +1268,23 @@ end
 
 -- Commands stay available when the helper is disabled -----------------------------
 
+-- A deferred save refresh must not repopulate the cache after disabling.
+local project_epoch = tmp .. "/epoch"
+local epoch_cart = project_epoch .. "/cart.p8"
+write(epoch_cart, cart_lines())
+local epoch_buf = edit(epoch_cart)
+wait_for(function()
+  return api().cart_info(epoch_buf) ~= nil
+end, "the epoch cart cache did not populate")
+vim.api.nvim_buf_set_lines(epoch_buf, -1, -1, false, { "epoch_value = 2" })
+vim.cmd("silent write")
 require("pico_lsp").setup({ disable = true })
+vim.wait(300, function()
+  return false
+end)
+if api().cart_info(epoch_buf) ~= nil then
+  fail("a deferred refresh repopulated the cache after disable")
+end
 if vim.fn.exists(":Pico8CartInfo") ~= 2 or vim.fn.exists(":Pico8Tabs") ~= 2 then
   fail("a disabled helper removed the cart commands")
 end

@@ -44,6 +44,9 @@ local last_error = nil
 -- Incremented by shutdown so scheduled callbacks from the previous setup do not
 -- repopulate a cleared cache.
 local epoch = 0
+-- Monotonic request order used to keep a slower, older response from
+-- overwriting a newer cache entry when two buffers re-key into the same root.
+local request_seq = 0
 
 local send_request
 local handle_response
@@ -151,7 +154,15 @@ local function same_uri(a, b)
   end
   local ok_a, path_a = pcall(vim.uri_to_fname, a)
   local ok_b, path_b = pcall(vim.uri_to_fname, b)
-  return ok_a and ok_b and vim.fs.normalize(path_a) == vim.fs.normalize(path_b)
+  if not ok_a or not ok_b then
+    return false
+  end
+  path_a = vim.fs.normalize(path_a)
+  path_b = vim.fs.normalize(path_b)
+  if vim.fn.has("win32") == 1 or vim.fn.has("mac") == 1 then
+    return path_a:lower() == path_b:lower()
+  end
+  return path_a == path_b
 end
 
 local function stop_timer(timer)
@@ -350,6 +361,12 @@ local function send_pending_if_ready(state, key)
   end
 end
 
+local function discard_response(state, key, generation, message)
+  log_debug("pico-lsp: discarding cart info response: " .. message)
+  finish_callbacks(state, generation, nil, message)
+  send_pending_if_ready(state, key)
+end
+
 -- Prefer the latest requester. If it closed or detached while its request was
 -- pending, another buffer sharing the root can still serve the request.
 local function request_target(state, key)
@@ -385,6 +402,8 @@ send_request = function(state, key)
   local generation = state.gen
   state.attempt = (state.attempt or 0) + 1
   local attempt = state.attempt
+  request_seq = request_seq + 1
+  local sequence = request_seq
   state.inflight = true
   state.pending = false
 
@@ -419,7 +438,7 @@ send_request = function(state, key)
   local params = { textDocument = { uri = uri } }
   local sent_ok, sent = pcall(client.request, client, "pico8/cartInfo", params, function(err, result)
     vim.schedule(function()
-      handle_response(key, state, generation, attempt, bufnr, uri, client_id, err, result)
+      handle_response(key, state, generation, attempt, sequence, bufnr, uri, client_id, err, result)
     end)
   end, bufnr)
 
@@ -439,7 +458,7 @@ send_request = function(state, key)
   end
 end
 
-handle_response = function(key, state, generation, attempt, bufnr, uri, client_id, err, result)
+handle_response = function(key, state, generation, attempt, sequence, bufnr, uri, client_id, err, result)
   if root_state[key] ~= state or state.attempt ~= attempt then
     return
   end
@@ -454,6 +473,31 @@ handle_response = function(key, state, generation, attempt, bufnr, uri, client_i
   -- this generation's callbacks; do not overwrite the cache from stale data.
   if generation ~= state.gen then
     send_pending_if_ready(state, key)
+    return
+  end
+
+  -- Check buffer/client liveness before even an error response: a request for a
+  -- buffer that closed or detached must be discarded, not recorded for health.
+  if not valid_buffer(bufnr) then
+    discard_response(state, key, generation, "the buffer closed before the cart info response arrived")
+    return
+  end
+  local current_client = client_for(bufnr)
+  local current_uri = document_uri(bufnr)
+  local mapped_key = buffer_roots[bufnr]
+  if
+    not current_client
+    or current_client.id ~= client_id
+    or current_uri ~= uri
+    or not mapped_key
+    or not same_uri(mapped_key, key)
+  then
+    discard_response(
+      state,
+      key,
+      generation,
+      "the pico_lsp client detached before the cart info response arrived"
+    )
     return
   end
 
@@ -474,24 +518,9 @@ handle_response = function(key, state, generation, attempt, bufnr, uri, client_i
     return
   end
 
-  -- Discard responses for a buffer that closed, was renamed, detached, or
-  -- re-attached to a different client while the request was in flight.
-  local current_client = client_for(bufnr)
-  local current_uri = valid_buffer(bufnr) and document_uri(bufnr) or nil
-  local mapped_key = buffer_roots[bufnr]
   local helper_owner = vim.b[bufnr].pico8_cart
-  if
-    not current_client
-    or current_client.id ~= client_id
-    or current_uri ~= uri
-    or not mapped_key
-    or not same_uri(mapped_key, key)
-    or (type(helper_owner) == "string" and helper_owner ~= "" and not same_uri(result.rootUri, helper_owner))
-  then
-    message = "the pico_lsp client detached before the cart info response arrived"
-    log_debug("pico-lsp: discarding cart info response: " .. message)
-    finish_callbacks(state, generation, nil, message)
-    send_pending_if_ready(state, key)
+  if type(helper_owner) == "string" and helper_owner ~= "" and not same_uri(result.rootUri, helper_owner) then
+    discard_response(state, key, generation, "the include moved to a different owning cart")
     return
   end
 
@@ -508,11 +537,15 @@ handle_response = function(key, state, generation, attempt, bufnr, uri, client_i
     mark_buffer(bufnr, key, client_id)
   end
 
-  -- Store the fresh response under the response's rootUri, never under the
-  -- buffer's old/provisional key.
-  target_state.info = result
-  target_state.last_error = nil
-  clear_error(target_key)
+  -- Store the response under the response's rootUri only when it is at least as
+  -- new as the target's cached data. A slower include response must not
+  -- overwrite a newer cart refresh that re-keyed into the same root.
+  if sequence >= (target_state.info_seq or 0) then
+    target_state.info = result
+    target_state.info_seq = sequence
+    target_state.last_error = nil
+    clear_error(target_key)
+  end
   send_pending_if_ready(target_state, target_key)
 end
 
