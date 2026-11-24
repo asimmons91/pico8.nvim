@@ -122,7 +122,9 @@ The server advertises standard range formatting, so Neovim sets 'formatexpr'
 for `pico8` buffers. |gq| formats the complete lines covered by the selection
 through `textDocument/rangeFormatting`; a single-line selection formats that
 line. The server formats the whole document for context but returns edits only
-for the selected lines, and non-code cart sections are preserved.
+for the selected lines, and non-code cart sections are preserved. The PICO-8
+formatter does not wrap long lines, so |gq| changes layout and spacing rather
+than reflowing comment text.
 
 A range that would change the line count is refused and the buffer is left
 unchanged. Format the whole document instead: >vim

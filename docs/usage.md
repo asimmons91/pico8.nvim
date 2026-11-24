@@ -173,7 +173,9 @@ buffer is left unchanged. Format the whole document instead:
 ```
 
 Non-code cart sections are preserved. Range formatting also works in cart-owned
-`.lua` buffers when an unrelated include in the same cart is missing.
+`.lua` buffers when an unrelated include in the same cart is missing. The
+PICO-8 formatter preserves comments and does not wrap long lines, so `gq`
+changes layout and spacing rather than reflowing comment text.
 
 On Neovim 0.12 and newer, `gx` on an `#include` target uses the server's
 document link and passes the resolved file to `vim.ui.open`, which uses the
