@@ -290,6 +290,27 @@ if not semi_ok then
 end
 assert_equal(buffer_name(0), vim.fs.normalize(semi_project .. "/lib.lua"), "gf searched upward from a semicolon path")
 
+local renamed_meta = tmp .. "/renamed[1]"
+write(renamed_meta .. "/lib.lua", { "print('renamed meta lib')" })
+edit(meta_cart)
+vim.cmd("silent saveas! " .. vim.fn.fnameescape(renamed_meta .. "/cart.p8"))
+assert_equal(
+  vim.bo[meta_buf].path,
+  includes.path_value(renamed_meta),
+  ":saveas did not apply the glob sentinel"
+)
+vim.cmd("cd " .. vim.fn.fnameescape(outside))
+vim.api.nvim_win_set_cursor(0, { line_of(meta_buf, "lib.lua"), 12 })
+local renamed_meta_ok, renamed_meta_err = pcall(vim.cmd, "normal! gf")
+if not renamed_meta_ok then
+  fail("gf failed after :saveas to a glob path: " .. tostring(renamed_meta_err))
+end
+assert_equal(
+  buffer_name(0),
+  vim.fs.normalize(renamed_meta .. "/lib.lua"),
+  ":saveas to a glob path left gf in the old directory"
+)
+
 -- A missing target reports a normal error and creates neither a file nor buffer.
 
 local ok, err, before = gf("missing.lua")
@@ -327,6 +348,9 @@ assert_equal(
 )
 local meta_path = includes.path_value("/tmp/a[1]")
 assert_equal(includes.path_value("/tmp/a*"), meta_path, "glob metacharacters should share the sentinel")
+for _, char in ipairs({ "]", "?", "$" }) do
+  assert_equal(includes.path_value("/tmp/a" .. char), meta_path, "path_value missed " .. char)
+end
 if meta_path:find("%[") ~= nil or meta_path:find("%*") ~= nil then
   fail("path_value left glob metacharacters in the path entry")
 end
