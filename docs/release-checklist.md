@@ -77,6 +77,9 @@ manual run. Do not mark an unrun platform as passing.
       root on 0.12.6.
 - [x] The statusline emits token/character data and omits the compressed
       segment. `:Pico8Tabs` follows the documented single-tab behavior.
+- [x] With `lua_ls` enabled, the file attached `lua_ls` first; switching to
+      `filetype=pico8` added `pico_lsp`, and detaching `lua_ls` left only
+      `pico_lsp`.
 - [x] Keep the best-effort standalone `.lua` guidance in `docs/usage.md`.
 
 ## Visuals and documentation
