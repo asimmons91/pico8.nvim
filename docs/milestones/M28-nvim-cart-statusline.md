@@ -1,7 +1,8 @@
 # M28 — Neovim Cart Budget Statusline and Tab Picker
 
-**Status:** Done — cached cart state, statusline formatting, refresh
-autocmds, `:Pico8CartInfo`, `:Pico8Tabs`, tests, and documentation are complete.
+**Status:** Done — client work complete. The pico-lsp API consumer link is
+prepared in [asimmons91/pico-lsp#71](https://github.com/asimmons91/pico-lsp/pull/71);
+merge it before a release that claims the external link.
 
 **Depends on:** M25 (drop-in configuration), M26 (helper correctness), M27
 (client capability wiring)
@@ -309,8 +310,11 @@ Rules:
 - [x] `:Pico8CartInfo` shows a useful summary.
 - [x] `:Pico8Tabs` jumps to the selected tab and handles includes/PNG carts.
 - [x] A failed request does not erase the last good value.
-- [x] README and [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md) document the API and lualine recipe
-      ([pico-lsp docs PR #71](https://github.com/asimmons91/pico-lsp/pull/71)).
+- [x] README documents the API and lualine recipe; the
+      [pico-lsp API docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/api.md)
+      consumer link is prepared in
+      [pico-lsp docs PR #71](https://github.com/asimmons91/pico-lsp/pull/71) and
+      must merge before a release that claims it.
 - [x] Headless tests and CI cover the cache and commands.
 
 ## Verification
