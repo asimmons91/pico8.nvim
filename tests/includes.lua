@@ -571,6 +571,10 @@ assert_equal(unnamed_buffers(), png_unnamed, "Pico8OpenPng on an open PNG leaked
 set_custom_png_options()
 vim.cmd("Pico8ReloadPng")
 assert_custom_png_options("Pico8ReloadPng on an open PNG")
+vim.bo[png_buf].buflisted = false
+vim.cmd("Pico8ReloadPng")
+assert_equal(vim.bo[png_buf].buflisted, false, "Pico8ReloadPng relisted an unlisted virtual cart")
+vim.bo[png_buf].buflisted = true
 
 -- A :bdelete'd virtual buffer is fully restored when reopened ------------------
 
@@ -593,6 +597,11 @@ assert_equal(
 )
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "reopening after bdelete leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "reopening after bdelete leaked an unnamed buffer")
+assert_contains(
+  vim.b[png_buf].undo_ftplugin or "",
+  "setlocal path<",
+  "reopened virtual buffer has no path undo hook"
+)
 
 -- Loading a :bdelete'd virtual buffer with :buffer restores it -----------------
 
@@ -611,6 +620,8 @@ assert_equal(
   includes.path_value(vim.fs.dirname(png_fixture)),
   ":buffer lost the scoped path"
 )
+-- Direct :buffer restores options only; reload restores text and client.
+assert_equal(#clients(png_buf), 0, ":buffer unexpectedly attached a client")
 vim.cmd("Pico8ReloadPng")
 if not vim.wait(10000, function()
   return #clients(png_buf) > 0
@@ -625,6 +636,56 @@ assert_equal(vim.bo[png_buf].buftype, "nofile", "Pico8ReloadPng after :buffer lo
 assert_equal(vim.bo[png_buf].modifiable, false, "Pico8ReloadPng after :buffer made the buffer modifiable")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, ":buffer + reload leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, ":buffer + reload leaked an unnamed buffer")
+
+-- A :bunload'd virtual buffer restores text and client through reload ----------
+
+vim.cmd("bunload " .. png_buf)
+assert_equal(vim.api.nvim_buf_is_loaded(png_buf), false, "bunload did not unload the virtual buffer")
+vim.cmd("buffer " .. png_buf)
+assert_equal(vim.api.nvim_get_current_buf(), png_buf, ":buffer after bunload did not load the virtual buffer")
+assert_equal(vim.bo[png_buf].buftype, "nofile", ":buffer after bunload lost nofile")
+assert_equal(vim.b[png_buf].pico8_virtual_cart, true, ":buffer after bunload lost the virtual marker")
+vim.cmd("Pico8ReloadPng")
+if not vim.wait(10000, function()
+  return #clients(png_buf) > 0
+end, 50) then
+  fail("Pico8ReloadPng after bunload did not attach a client")
+end
+if #vim.api.nvim_buf_get_lines(png_buf, 0, -1, false) < 2 then
+  fail("Pico8ReloadPng after bunload did not restore the cart text")
+end
+assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8ReloadPng after bunload changed buffers")
+assert_equal(vim.bo[png_buf].buftype, "nofile", "Pico8ReloadPng after bunload lost nofile")
+assert_equal(vim.bo[png_buf].modifiable, false, "Pico8ReloadPng after bunload made the buffer modifiable")
+
+-- A custom global path survives restoration and reload ------------------------
+
+local global_png = tmp .. "/global/global.p8.png"
+vim.fn.mkdir(vim.fs.dirname(global_png), "p")
+if not vim.uv.fs_copyfile(png_fixture, global_png) then
+  fail("could not copy the global-path PNG fixture")
+end
+vim.o.path = "/custom/global/path"
+edit(global_png)
+local global_buf = vim.api.nvim_get_current_buf()
+assert_equal(vim.bo[global_buf].path, "", "auto-open set a local path despite a custom global path")
+assert_equal(vim.fn.eval("&path"), "/custom/global/path", "auto-open replaced a custom global path")
+vim.cmd("bdelete " .. global_buf)
+vim.cmd("buffer " .. global_buf)
+assert_equal(vim.bo[global_buf].path, "", ":buffer set a local path despite a custom global path")
+assert_equal(vim.fn.eval("&path"), "/custom/global/path", ":buffer replaced a custom global path")
+vim.cmd("Pico8ReloadPng")
+if not vim.wait(10000, function()
+  return #clients(global_buf) > 0
+end, 50) then
+  fail("Pico8ReloadPng did not attach a client for the global-path cart")
+end
+assert_equal(vim.bo[global_buf].path, "", "reload set a local path despite a custom global path")
+assert_equal(vim.fn.eval("&path"), "/custom/global/path", "reload replaced a custom global path")
+vim.bo[global_buf].filetype = "text"
+assert_equal(vim.fn.eval("&path"), "/custom/global/path", "filetype undo lost a custom global path")
+vim.o.path = ".,,"
+vim.cmd("bwipeout! " .. global_buf)
 
 -- Invalid PNGs leave an empty named scratch buffer -----------------------------
 

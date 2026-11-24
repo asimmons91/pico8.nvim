@@ -125,11 +125,11 @@ decode or client-start failure, the buffer becomes an empty, read-only
 `nofile` buffer with its name intact; raw binary data is never shown. Retry
 with |:Pico8OpenPng|. The command offers file completion. Reopening the same
 PNG with `:edit`, `:split`, or |:Pico8OpenPng| reuses its virtual buffer and
-preserves buffer-local include/expression/path values. A `:bdelete`d virtual
-cart is restored when loaded again or reloaded with |:Pico8ReloadPng|.
-|:Pico8ReloadPng| re-decodes the current virtual cart. The virtual buffer
-carries `b:pico8_cart_root` and a scoped 'path', so |gf| resolves includes
-against the PNG's directory.
+preserves buffer-local include/expression/path values. A `:bdelete`d or
+unloaded virtual cart restores its virtual options when loaded again;
+|:Pico8ReloadPng| restores its text and client and keeps a deliberately
+unlisted buffer unlisted. The virtual buffer carries `b:pico8_cart_root` and a
+scoped 'path', so |gf| resolves includes against the PNG's directory.
 
 Auto-open is installed only by `require("pico_lsp").setup()` when the helper is
 enabled. A disabled setup installs no PNG autocmd, and the shipped
