@@ -27,5 +27,10 @@
   after attach, add `glyph_maps` setup activation, accept names, decimal bytes,
   and `0x` bytes in `:Pico8InsertGlyph`, filter the picker by name,
   description, or byte, and add cached-name command completion.
+- Complete M32: add `:checkhealth pico_lsp` with read-only Neovim,
+  configuration, binary/version, client, feature, include, helper, and
+  Tree-sitter checks, plus headless coverage for the healthy, missing-binary,
+  function-command, disabled-helper, feature-warning, lua_ls-conflict, and
+  no-side-effect paths.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.

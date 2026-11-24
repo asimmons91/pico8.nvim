@@ -1444,6 +1444,7 @@ end
 
 function M.setup(opts)
   opts = opts or {}
+  M.did_setup = true
   M.opts = opts
   M.disabled = opts.disable == true or vim.g.pico_lsp_helper_disabled == 1
   -- The catalog belongs to the current client/server settings. A re-setup is a

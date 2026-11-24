@@ -160,6 +160,21 @@ enabled. A disabled setup installs no PNG autocmd, and the shipped
 `lsp/pico_lsp.lua` config alone does not auto-open PNGs.
 
 ==============================================================================
+HEALTH CHECK                                                *pico8-health*
+
+Run `:checkhealth pico_lsp` for a read-only report of the plugin. It covers
+the Neovim version, `vim.lsp.config` presence, the resolved command and its
+source, the server binary and `--version` probe, running clients and their
+roots, client-side code-lens and inlay-hint state, helper-managed `.lua`
+buffers, helper commands, and Tree-sitter availability.
+
+Health does not start or stop clients, download a binary, install a parser,
+edit a buffer, or change configuration. The only process it runs is the
+configured binary with `--version`, with a 2-second timeout. A function-valued
+`cmd` is reported but never called. See `docs/troubleshooting.md` for how to
+read the report.
+
+==============================================================================
 COMMANDS                                                   *pico8-commands*
 
 :Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer;
@@ -173,6 +188,9 @@ COMMANDS                                                   *pico8-commands*
 :Pico8CartInfo           Request and show the cart budget with file detail.
 :Pico8Tabs               Pick a code tab and jump to its start line.
 :Pico8OpenCart           Open the cart that owns the current include buffer.
+
+`:checkhealth pico_lsp` reports plugin state without changing it; see
+|pico8-health|.
 
 `:Pico8Tabs` explains that tabs belong to the owning cart on an included `.lua`
 buffer, and jumps inside the virtual buffer for a decoded `.p8.png` cart.

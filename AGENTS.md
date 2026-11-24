@@ -10,9 +10,9 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, M28, M29, M30, and M31 are complete. M32 and M34 are
-  proposed. M33 remains server-owned in `pico-lsp`. M35 (Mason and LazyVim
-  extra) is proposed.
+- M25, M26, M27, M28, M29, M30, M31, and M32 are complete. M34 is proposed.
+  M33 remains server-owned in `pico-lsp`. M35 (Mason and LazyVim extra) is
+  proposed.
 - The M27 client module enables the budget code lens and inlay-hint display for
   `pico8` buffers, with `codelens`/`inlay_hints` setup options and
   `:Pico8ToggleInlayHints`. The shipped `lsp/pico_lsp.lua` enables the display
@@ -54,6 +54,15 @@
   canonical names, and the picker filters without replacing the full cache.
   `setup({ glyph_maps = true })` installs the `.p8` Shift maps alongside the
   existing `g:pico8_glyph_maps` switch. Tests are in `tests/glyphs.lua`.
+- The M32 health module implements `:checkhealth pico_lsp` with Neovim,
+  configuration, binary/version, running-client, client-feature, managed
+  include, helper/command, and Tree-sitter sections. It is read-only: no
+  client starts, parser installs, buffer edits, or configuration changes. Only
+  the configured binary is spawned with `--version`, with a 2-second timeout;
+  a function-valued `cmd` is never called. It uses the alternate buffer or
+  previous tab to recover the pre-`:checkhealth` cart, treats unset
+  `limits.codeLens` as `true`, and warns about missing helper commands only
+  after an enabled setup. Tests are in `tests/health.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
@@ -82,8 +91,9 @@
 
 - `PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh` runs the headless Neovim tests
   (config, helper smoke, M26 correctness, M27 features, M28 cart info, M29
-  include buffers, M30 includes/PNG auto-open, and fallback). The binary must be
-  installed; the test does not build the Go server.
+  include buffers, M30 includes/PNG auto-open, M31 glyphs, M32 health, and
+  fallback). The binary must be installed; the test does not build the Go
+  server.
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
 - `:helptags doc` regenerates the help tags when manually testing.

@@ -6,16 +6,16 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M31 is complete. The plugin ships native LSP configuration,
+**Status:** M32 is complete. The plugin ships native LSP configuration,
 cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
 with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
 budget code lens and inlay hints, a cached cart budget statusline with
 `:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment settings, cart variables,
 and `:Pico8OpenCart` for included `.lua` buffers, `gf` navigation for
-`#include` targets, direct `nvim cart.p8.png` decoding, and cached P8SCII glyph
-input with byte forms and a filtered picker. M32 and M34 are proposed; M33
-(range formatting, document links, and code-lens refresh) remains server work
-in `pico-lsp`.
+`#include` targets, direct `nvim cart.p8.png` decoding, cached P8SCII glyph
+input with byte forms and a filtered picker, and `:checkhealth pico_lsp`. M34
+is proposed; M33 (range formatting, document links, and code-lens refresh)
+remains server work in `pico-lsp`.
 
 ## Requirements
 
@@ -142,6 +142,33 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - `pico8/cartInfo` is cached asynchronously and powers a statusline API,
   `:Pico8CartInfo`, and `:Pico8Tabs`. Root carts, cart-owned includes, and
   decoded `.p8.png` virtual buffers all show their owning cart's budget.
+- `:checkhealth pico_lsp` reports the Neovim version, configuration, resolved
+  binary and version, running clients, client feature state, managed includes,
+  helper commands, and Tree-sitter availability without changing anything.
+
+### Health check
+
+Run `:checkhealth pico_lsp` before deeper troubleshooting. It reports:
+
+- the Neovim version and whether `vim.lsp.config["pico_lsp"]` is available;
+- the resolved `cmd`, its source, the executable path, the `--version` probe,
+  and the configured server log path;
+- each running `pico_lsp` client with its root, attached buffer count, and
+  selected `pico8` settings;
+- the code-lens and inlay-hint state for the active cart, including mismatches
+  between the server settings and the client display;
+- helper-managed `.lua` buffers, their owning carts, comment settings, and
+  `lua_ls` conflicts;
+- whether `require("pico_lsp").setup()` ran, whether the helper is disabled,
+  and which optional commands exist;
+- whether the `pico8` Tree-sitter parser and filetype detection are available.
+
+Health is read-only. It never starts a client, downloads a binary, installs a
+parser, edits a buffer, or changes configuration. The only process it runs is
+the configured binary with `--version`, with a 2-second timeout. A
+function-valued `cmd` is reported but never called. Missing binaries and
+malformed configuration are errors; failed probes and optional features such as
+the Tree-sitter parser and disabled capabilities are warnings or infos.
 
 ### Included `.lua` files
 
@@ -364,7 +391,7 @@ vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
 | `:Pico8CartInfo` | Show the cart budget with per-file and per-include detail. |
 | `:Pico8Tabs` | Pick a code tab and place the cursor on its start line. |
 | `:Pico8OpenCart` | Open the cart that owns the current included `.lua` buffer. |
-| `:checkhealth pico_lsp` | Proposed in M32. |
+| `:checkhealth pico_lsp` | Report configuration, binary, clients, features, includes, helper commands, and Tree-sitter state. |
 
 `:Pico8CartInfo` requests a fresh value asynchronously and notifies the same
 summary plus compact file detail. `:Pico8Tabs` fetches fresh tab lines, opens
@@ -429,8 +456,9 @@ cache and prefetch behavior, byte insertion, filtered picker and completion,
 cached cart info and statusline text, include and PNG cart
 resolution, `gf` include navigation, refresh debouncing and coalescing,
 included-buffer comment settings and variables, `:Pico8OpenCart`, the cart
-commands, and fallback behavior. The CI workflow checks out the server and
-builds a test binary on Neovim 0.11 and 0.12.
+commands, health-check sections and read-only behavior, and fallback behavior.
+The CI workflow checks out the server and builds a test binary on Neovim 0.11
+and 0.12.
 
 ## Relationship to pico-lsp
 

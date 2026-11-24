@@ -148,15 +148,28 @@ vim.api.nvim_create_autocmd("FileType", {
 `:Pico8InstallParser` is proposed in
 [M34](milestones/M34-nvim-treesitter-install.md).
 
+`:checkhealth pico_lsp` reports whether the parser loads and whether `pico8`
+filetype detection is registered. It never installs or starts the parser.
+
 ## Verify
 
-1. Open a cart:
+1. Run the plugin health check:
+
+   ```vim
+   :checkhealth pico_lsp
+   ```
+
+   It reports the resolved binary, server version, configuration, clients,
+   client features, helper commands, managed includes, and Tree-sitter status.
+   It never starts clients or changes configuration.
+
+2. Open a cart:
 
    ```sh
    nvim tests/fixtures/smoke.p8
    ```
 
-2. Check the filetype and client:
+3. Check the filetype and client:
 
    ```vim
    :set filetype?
@@ -164,9 +177,9 @@ vim.api.nvim_create_autocmd("FileType", {
    :lua =vim.lsp.get_clients({ bufnr = 0 })
    ```
 
-3. Open an included `.lua` file and confirm the helper attaches.
+4. Open an included `.lua` file and confirm the helper attaches.
 
-4. Run the headless test suite:
+5. Run the headless test suite:
 
    ```sh
    PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh

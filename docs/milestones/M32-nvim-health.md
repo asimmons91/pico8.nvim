@@ -1,12 +1,13 @@
 # M32 — Neovim Health Check
 
-**Status:** Proposed — not started.
+**Status:** Done — module, report sections, tests, and documentation are
+complete.
 
 **Depends on:** M25 (drop-in configuration), M26 (helper correctness), M27
 (client capability wiring), M28 (cart cache), M29 (include buffer settings),
 M30 (PNG helper), M31 (glyph cache)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-24.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -39,7 +40,17 @@ next step.
 | D7 | Include report | For helper-managed `.lua` buffers, report the owning cart and whether the client is attached. Warn when `lua_ls` and `pico_lsp` are both attached. |
 | D8 | Helper report | Report whether `require("pico_lsp").setup` ran, whether it is disabled, and which optional commands exist. Missing commands are a warning only when the helper is expected. |
 | D9 | Tree-sitter report | Advisory only: report whether the `pico8` parser loads and point to M34's installer. Do not install it. |
-| D10 | Errors | Missing binary, malformed config, and failed health probes are errors with actionable text. Optional features are warnings or info. |
+| D10 | Errors | Missing binary and malformed config are errors with actionable text. Failed probes and optional features are warnings or info. |
+
+Implementation choices confirmed on 2026-11-24: an unset
+`pico8.limits.codeLens` is treated as the server default `true`, so health warns
+when the client display is disabled. Missing helper commands warn only after an
+enabled `require("pico_lsp").setup()`; base-config users get info. The settings
+report shows `apiVersion`, `typeChecking`, `inlayHints`, `limits.codeLens`, and
+`diagnostics.mode` instead of the full `pico8` table. Because `:checkhealth`
+switches to its own buffer before running checks, the "current buffer" sections
+use the alternate buffer and then the previous tab's window to find the cart the
+user was editing.
 
 ## Scope
 
@@ -260,14 +271,14 @@ For the current `pico8` buffer with an attached client:
 
 ## Exit criteria
 
-- [ ] `:checkhealth pico_lsp` reports Neovim, config, binary, version, clients,
+- [x] `:checkhealth pico_lsp` reports Neovim, config, binary, version, clients,
       client features, includes, helper commands, and Tree-sitter.
-- [ ] A missing binary produces an actionable error.
-- [ ] Missing/disabled capabilities produce warnings that match the actual cause.
-- [ ] `lua_ls` conflicts are reported for managed include buffers.
-- [ ] Health never starts clients, installs parsers, or modifies state.
-- [ ] README and troubleshooting make health the first diagnostic step.
-- [ ] Headless tests and CI cover the main sections.
+- [x] A missing binary produces an actionable error.
+- [x] Missing/disabled capabilities produce warnings that match the actual cause.
+- [x] `lua_ls` conflicts are reported for managed include buffers.
+- [x] Health never starts clients, installs parsers, or modifies state.
+- [x] README and troubleshooting make health the first diagnostic step.
+- [x] Headless tests and CI cover the main sections.
 
 ## Risks
 

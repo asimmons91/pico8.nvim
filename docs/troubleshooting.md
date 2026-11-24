@@ -2,6 +2,9 @@
 
 ## First checks
 
+- `:checkhealth pico_lsp` is the first diagnostic step. It reports the
+  configuration, binary and version, clients, client feature state, managed
+  includes, helper commands, and Tree-sitter availability.
 - `pico-lsp --version` verifies which binary Neovim would run.
 - `:checkhealth vim.lsp` shows Neovim's LSP health and attached clients.
 - `:lua =vim.lsp.get_clients({ bufnr = 0 })` shows the current buffer's clients.
@@ -9,23 +12,62 @@
 - `:lua =vim.fn.stdpath("data")` shows the data directory used by a future
   parser installer.
 
-`:checkhealth pico_lsp` is proposed in M32. Until then, use the Neovim checks
-above.
+## Using `:checkhealth pico_lsp`
+
+The health report is read-only. It never starts or stops a client, downloads a
+binary, installs a parser, edits a buffer, or changes configuration. The only
+process it runs is the configured binary with `--version`, with a 2-second
+timeout. A function-valued `cmd` is reported as user-supplied but is never
+called.
+
+Read the report from the top:
+
+1. **Neovim** — 0.11 or newer is required.
+2. **Configuration** — confirms `vim.lsp.config["pico_lsp"]` is available and
+   validates the command shape. A bare-string `cmd` is rejected by Neovim even
+   if the health probe can still resolve it.
+3. **Server binary** — resolves the executable, probes `--version`, and
+   compares it with a running client's `server_info.version`. Missing binaries
+   include install steps.
+4. **Running clients** — shows each client's root, attached buffer count, and
+   selected `pico8` settings. If a cart is active but unattached, the report
+   points to the runtime path and `:checkhealth vim.lsp`.
+5. **Client features** — compares `pico8.inlayHints` and
+   `pico8.limits.codeLens` with the client display state. An unset
+   `limits.codeLens` counts as the server default `true`; on Neovim 0.11 the
+   report describes the refresh-based code-lens engine instead of claiming a
+   per-buffer toggle.
+6. **Included `.lua` buffers** — lists helper-managed buffers, their owning
+   carts, attached clients, and comment settings. A `lua_ls` + `pico_lsp`
+   attachment is reported as unsupported.
+7. **Helper** — reports whether `require("pico_lsp").setup()` ran, whether the
+   helper is disabled, which optional commands exist, and the LSP/server log
+   paths.
+8. **Tree-sitter** — reports whether the `pico8` parser loads and whether
+   filetype detection is registered. Neither is required for the Vim syntax
+   fallback.
+
+Missing optional pieces are infos or warnings; broken configuration and missing
+executables are errors.
 
 ## Client does not attach
 
-1. Confirm the plugin is on `runtimepath`:
+1. Run `:checkhealth pico_lsp` and read the Configuration, Server binary,
+   Running clients, and Helper sections.
+2. Confirm the plugin is on `runtimepath`:
    `:lua =vim.o.runtimepath`.
-2. Confirm `lsp/pico_lsp.lua` is readable and `vim.lsp.config["pico_lsp"]`
+3. Confirm `lsp/pico_lsp.lua` is readable and `vim.lsp.config["pico_lsp"]`
    exists.
-3. Confirm `require("pico_lsp").setup()` ran. With lazy.nvim, use `opts = {}`
+4. Confirm `require("pico_lsp").setup()` ran. With lazy.nvim, use `opts = {}`
    or add `config = function() require("pico_lsp").setup() end`.
-4. Check the server command: `vim.g.pico_lsp_cmd`, `PICO_LSP_BIN`, or the
+5. Check the server command: `vim.g.pico_lsp_cmd`, `PICO_LSP_BIN`, or the
    configured `cmd`.
-5. Open `:checkhealth vim.lsp` and inspect the client log.
+6. Open `:checkhealth vim.lsp` and inspect the client log.
 
 ## Included `.lua` file does not attach
 
+- Run `:checkhealth pico_lsp` and read the Helper and Included `.lua` buffers
+  sections.
 - Confirm the include is a line beginning with `#include`.
 - Confirm the path resolves relative to the cart directory.
 - Unsaved includes work: the helper reads a loaded cart buffer instead of the
@@ -69,6 +111,8 @@ above.
 
 ## Lens or hints are missing
 
+- Run `:checkhealth pico_lsp` and read the Client features section. It compares
+  the server settings with the client display and warns about a mismatch.
 - Confirm a `pico_lsp` client is attached: `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
 - The shipped config enables the client-side display for `pico8` buffers. If
   you replaced its `on_attach`, enable the display yourself; see
@@ -187,6 +231,7 @@ above.
 
 ## Tree-sitter parser does not load
 
+- Run `:checkhealth pico_lsp` and read the Tree-sitter section.
 - Confirm the parser exists at `stdpath("data")/site/parser/pico8.so`.
 - Confirm the queries are under `stdpath("data")/site/queries/pico8/`.
 - Run `:lua =pcall(vim.treesitter.language.add, "pico8")` and inspect the error.
