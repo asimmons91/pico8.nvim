@@ -24,7 +24,7 @@ The specifications have been adapted for this repository:
 | M31 | [Glyph input](M31-nvim-glyph-input.md) | Done |
 | M32 | [Health check](M32-nvim-health.md) | Done |
 | M33 | [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md) | Done (server) |
-| M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Proposed |
+| M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Done |
 
 M33, [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md),
 is implemented in the server repository. The client consumes those capabilities

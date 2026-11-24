@@ -35,5 +35,9 @@
 - Complete M33: consume the server's standard range formatting, document links,
   and code-lens refresh through Neovim, and add headless `gq` and Neovim 0.12
   `gx` coverage including the line-count refusal path.
+- Complete M34: add `:Pico8InstallParser` with atomic builds from the vendored
+  grammar, idempotent parser/query installation, `!` rebuilds, source and
+  compiler overrides, current-session registration, isolated headless tests,
+  and macOS CI coverage.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.

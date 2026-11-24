@@ -318,8 +318,10 @@ The plugin ships `syntax/pico8.vim` and the editor-oriented Tree-sitter grammar
 under `vendor/tree-sitter-pico8`. The grammar highlights cart headers, sections,
 tab markers, dialect syntax, and non-code payloads.
 
-See [installation](install.md#tree-sitter) for the manual parser build. The
-`:Pico8InstallParser` command is proposed in M34.
+See [installation](install.md#tree-sitter) for the parser installer, source
+overrides, compiler selection, and the manual build fallback. `:Pico8InstallParser`
+installs the parser and queries but does not start highlighting; add the
+documented `FileType pico8` autocmd if you want it automatically.
 
 The Vim syntax file remains the no-compiler fallback. LSP semantic tokens cover
 Lua code, while the syntax file also highlights non-code `.p8` sections.
@@ -447,4 +449,4 @@ each section.
 | `:Pico8CartInfo`, `:Pico8Tabs` | Available |
 | `:Pico8OpenCart` | Available |
 | `:checkhealth pico_lsp` | Available |
-| `:Pico8InstallParser` | Proposed (M34) |
+| `:Pico8InstallParser[!]` | Available |

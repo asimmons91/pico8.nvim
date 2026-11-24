@@ -10,9 +10,9 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, M28, M29, M30, M31, M32, and M33 are complete. M34 is
-  proposed. M35 (Mason and LazyVim extra) is proposed. M33 is server-owned in
-  `pico-lsp`; this repository consumes its standard LSP hooks and tests them.
+- M25, M26, M27, M28, M29, M30, M31, M32, M33, and M34 are complete. M35
+  (Mason and LazyVim extra) is proposed. M33 is server-owned in `pico-lsp`;
+  this repository consumes its standard LSP hooks and tests them.
 - The M27 client module enables the budget code lens and inlay-hint display for
   `pico8` buffers, with `codelens`/`inlay_hints` setup options and
   `:Pico8ToggleInlayHints`. The shipped `lsp/pico_lsp.lua` enables the display
@@ -72,6 +72,16 @@
   the server's document links drive Neovim 0.12 `gx`; and the server sends
   throttled code-lens refreshes. No plugin module is required. Tests are in
   `tests/standard_hooks.lua`.
+- The M34 Tree-sitter installer builds the vendored grammar with `$CC`, `cc`, or
+  `clang`, installs `pico8.so`/`pico8.dll` under `stdpath("data")/site/parser`,
+  copies the three queries under `site/queries/pico8`, adds `site` to
+  `runtimepath` once, and registers the language for the current session.
+  `:Pico8InstallParser!` forces a rebuild; builds are atomic and a failed
+  rebuild keeps the previous parser. Source discovery uses
+  `vim.g.pico8_treesitter_source`, `PICO_LSP_TREE_SITTER`, then the vendored
+  directory. The command is registered by `setup()` (including a disabled
+  helper) and by the shipped `lsp/pico_lsp.lua`. Tests are in
+  `tests/treesitter.lua` with an isolated `XDG_DATA_HOME`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
@@ -101,14 +111,16 @@
 - `PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh` runs the headless Neovim tests
   (config, helper smoke, M26 correctness, M27 features, M28 cart info, M29
   include buffers, M30 includes/PNG auto-open, M31 glyphs, M32 health, M33
-  standard hooks, and fallback). The binary must be installed; the test does
-  not build the Go server.
+  standard hooks, M34 Tree-sitter installer, and fallback). The binary must be
+  installed; the test does not build the Go server. `tests/run.sh` gives the
+  installer test its own temporary `XDG_DATA_HOME`.
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
 - `:helptags doc` regenerates the help tags when manually testing.
 - `git diff --check` is the minimum text sanity check.
-- CI installs Neovim 0.11 and 0.12, builds or downloads a `pico-lsp` test
-  binary, and runs the headless tests.
+- CI installs Neovim 0.11 and 0.12 on Ubuntu, builds or downloads a
+  `pico-lsp` test binary, and runs the headless tests. A macOS job runs the
+  Tree-sitter installer test with the system compiler.
 
 ## Testing rules
 

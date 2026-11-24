@@ -9,8 +9,8 @@
 - `:checkhealth vim.lsp` shows Neovim's LSP health and attached clients.
 - `:lua =vim.lsp.get_clients({ bufnr = 0 })` shows the current buffer's clients.
 - `:set filetype?` should report `pico8` in a cart.
-- `:lua =vim.fn.stdpath("data")` shows the data directory used by a future
-  parser installer.
+- `:lua =vim.fn.stdpath("data")` shows the data directory used by
+  `:Pico8InstallParser`.
 
 ## Using `:checkhealth pico_lsp`
 
@@ -261,11 +261,20 @@ executables are errors.
 ## Tree-sitter parser does not load
 
 - Run `:checkhealth pico_lsp` and read the Tree-sitter section.
-- Confirm the parser exists at `stdpath("data")/site/parser/pico8.so`.
+- Confirm the parser exists at `stdpath("data")/site/parser/pico8.so`
+  (`.dll` on Windows).
 - Confirm the queries are under `stdpath("data")/site/queries/pico8/`.
 - Run `:lua =pcall(vim.treesitter.language.add, "pico8")` and inspect the error.
-- Rebuild with the command in [installation](install.md#tree-sitter).
-- The committed parser targets ABI 14 for Neovim 0.11+.
+- Rebuild with `:Pico8InstallParser!`, or with the manual command in
+  [installation](install.md#tree-sitter).
+- If the command reports a missing compiler, install `cc`/`clang` or set `$CC`
+  to one executable. Point `g:pico8_treesitter_source` or
+  `PICO_LSP_TREE_SITTER` at the grammar directory if the vendored sources are
+  not beside the plugin.
+- After a forced rebuild, restart Neovim to load the new binary. The committed
+  parser targets ABI 14 for Neovim 0.11+.
+- The installer writes only under `stdpath("data")/site`; a write failure names
+  the destination path and usually means that directory is not writable.
 
 ## Logs
 

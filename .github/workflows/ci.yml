@@ -45,3 +45,27 @@ jobs:
           PICO_LSP_BIN: ${{ github.workspace }}/bin/pico-lsp
         run: |
           tests/run.sh
+
+  treesitter-macos:
+    name: Tree-sitter installer (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: v0.12.6
+
+      - name: Check C compiler
+        run: command -v cc || command -v clang
+
+      - name: Run Tree-sitter installer test
+        env:
+          PICO8_NVIM_ROOT: ${{ github.workspace }}
+          XDG_DATA_HOME: ${{ runner.temp }}/pico8-nvim-data
+        run: |
+          mkdir -p "$XDG_DATA_HOME"
+          nvim --headless --clean -u NONE \
+            --cmd "set runtimepath+=$PICO8_NVIM_ROOT" \
+            -l "$PICO8_NVIM_ROOT/tests/treesitter.lua"

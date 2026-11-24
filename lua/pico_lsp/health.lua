@@ -1094,6 +1094,7 @@ local function check_helper(cmd)
     "Pico8Refresh",
     "Pico8ToggleInlayHints",
     "Pico8OpenCart",
+    "Pico8InstallParser",
   }
   local present = {}
   local missing = {}
@@ -1173,8 +1174,7 @@ local function check_treesitter()
       ok("pico8 Tree-sitter parser loads")
     else
       info("pico8 Tree-sitter parser is not available; Vim syntax highlighting still works")
-      info("Build it from vendor/tree-sitter-pico8 as described in docs/install.md#tree-sitter.")
-      info("Automatic installation is proposed in M34 (:Pico8InstallParser).")
+      info("Run :Pico8InstallParser, or build it manually as described in docs/install.md#tree-sitter.")
     end
   end
 
