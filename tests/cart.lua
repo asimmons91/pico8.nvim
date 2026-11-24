@@ -1531,7 +1531,15 @@ edit(uo_lib)
 vim.cmd("Pico8CartInfo")
 edit(uo_a)
 vim.api.nvim_buf_set_lines(uo_a_buf, 0, -1, false, cart_lines({ "uo_a = 1" }))
-vim.cmd("silent write")
+-- Let didChange reach the server before the helper's ownership sweep.
+vim.wait(100, function()
+  return false
+end)
+local cart_module = require("pico_lsp.cart")
+local original_refresh_all = cart_module.refresh_all
+cart_module.refresh_all = function() end
+vim.cmd("Pico8Refresh")
+cart_module.refresh_all = original_refresh_all
 local uo_summaries = {}
 wait_for(function()
   uo_summaries = {}
