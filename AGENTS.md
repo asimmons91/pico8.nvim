@@ -10,7 +10,7 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, and M28 are complete. M29–M32 and M34 are proposed. M33
+- M25, M26, M27, M28, and M29 are complete. M30–M32 and M34 are proposed. M33
   remains server-owned in `pico-lsp`. M35 (Mason and LazyVim extra) is proposed.
 - The M27 client module enables the budget code lens and inlay-hint display for
   `pico8` buffers, with `codelens`/`inlay_hints` setup options and
@@ -24,6 +24,12 @@
   decoded `.p8.png` virtual buffers. The shipped config loads the module so
   base-config users get the cache and commands; a disabled helper clears the
   cache but keeps the read-only commands.
+- The M29 include settings apply PICO-8 `comments`/`commentstring` per option
+  when the buffer still has stock or empty Lua values, record only what changed,
+  and restore it on managed detach when still in place. Managed includes expose
+  `b:pico8_cart`/`b:pico8_cart_root` and `:Pico8OpenCart`; exact PICO-8 values
+  are treated as user values, and the command is managed-include only. Tests are
+  in `tests/include_buffers.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

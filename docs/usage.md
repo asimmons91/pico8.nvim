@@ -103,10 +103,18 @@ setlocal comments=:---,:--,://
 setlocal commentstring=--\ %s
 ```
 
-PICO-8 comment settings for cart-owned `.lua` buffers, including `//`
-recognition, are proposed in M29. M28 already sets `b:pico8_cart` to the owning
-cart URI on helper-managed includes; M29 adds the rest of the buffer-variable
-surface and the included-buffer settings.
+A helper-managed include keeps `filetype=lua` and gets the same comment leaders
+when it still has stock Lua settings. `comments` gains `://` so comment-aware
+formatting recognizes PICO-8 `//` comments, while `gcc` still uses `--`. A
+custom `comments` or `commentstring` value is never overwritten. On managed
+detach, including helper shutdown, the helper restores only the values it
+changed and only if they are still in place.
+
+Managed includes expose `b:pico8_cart` (the owning cart URI) and
+`b:pico8_cart_root` (the normalized cart directory) for other plugins.
+`:Pico8OpenCart` opens the owner in the current window. It reports that the
+buffer is already a cart on a `.p8` or `.p8.png` buffer, and reports no owner on
+an unrelated buffer.
 
 ## Read-only `.p8.png` carts
 
@@ -296,6 +304,6 @@ buffer it jumps inside the virtual buffer.
 | `:Pico8Refresh` | Available |
 | `:Pico8ToggleInlayHints` | Available |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Available |
-| `:Pico8OpenCart` | Proposed (M29) |
+| `:Pico8OpenCart` | Available |
 | `:checkhealth pico_lsp` | Proposed (M32) |
 | `:Pico8InstallParser` | Proposed (M34) |

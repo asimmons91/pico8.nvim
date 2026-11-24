@@ -6,13 +6,14 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M28 is complete. The plugin ships native LSP configuration,
+**Status:** M29 is complete. The plugin ships native LSP configuration,
 cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
 with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
-budget code lens and inlay hints, and a cached cart budget statusline with
-`:Pico8CartInfo` and `:Pico8Tabs`. M29–M32 and M34 are proposed; M33 (range
-formatting, document links, and code-lens refresh) remains server work in
-`pico-lsp`.
+budget code lens and inlay hints, a cached cart budget statusline with
+`:Pico8CartInfo` and `:Pico8Tabs`, and PICO-8 comment settings, cart variables,
+and `:Pico8OpenCart` for included `.lua` buffers. M30–M32 and M34 are proposed;
+M33 (range formatting, document links, and code-lens refresh) remains server
+work in `pico-lsp`.
 
 ## Requirements
 
@@ -124,11 +125,38 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
   server decide what appears; the latter defaults to off.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
   glyph maps work for `.p8` carts.
+- Cart-owned `.lua` files stay `lua` buffers but use PICO-8's comment leaders,
+  expose their owning cart through buffer variables, and can open it with
+  `:Pico8OpenCart`.
 - Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - The P8SCII glyph picker is available through `:Pico8InsertGlyph`.
 - `pico8/cartInfo` is cached asynchronously and powers a statusline API,
   `:Pico8CartInfo`, and `:Pico8Tabs`. Root carts, cart-owned includes, and
   decoded `.p8.png` virtual buffers all show their owning cart's budget.
+
+### Included `.lua` files
+
+The helper keeps `filetype=lua` and fills in PICO-8 comment defaults only when
+the buffer still has stock Lua settings:
+
+- `comments` becomes `:---,:--,://`, so comment-aware formatting recognizes
+  `//` comments;
+- `commentstring` becomes `-- %s`, so `gcc`/`gc` use `--`.
+
+A custom `comments` or `commentstring` value is never overwritten. On managed
+detach, including helper shutdown, the helper restores only the values it
+changed and only if they are still in place; a later user change is kept.
+
+Managed include buffers also expose these compatibility variables; treat them
+as read-only:
+
+- `b:pico8_cart` — the owning cart URI;
+- `b:pico8_cart_root` — the normalized cart directory.
+
+`:Pico8OpenCart` opens the owning cart in the current window. On a cart or a
+decoded `.p8.png` buffer it reports that the buffer is already a cart; on an
+unrelated buffer it reports that no owner was found. Glyph maps remain
+`.p8`-only, and the helper does not change `syntax`, indentation, or filetype.
 
 ### Opt-in LSP features
 
@@ -256,6 +284,7 @@ vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
 | `:Pico8ToggleInlayHints` | Toggle client-side inlay hints for the current buffer. |
 | `:Pico8CartInfo` | Show the cart budget with per-file and per-include detail. |
 | `:Pico8Tabs` | Pick a code tab and place the cursor on its start line. |
+| `:Pico8OpenCart` | Open the cart that owns the current included `.lua` buffer. |
 | `:checkhealth pico_lsp` | Proposed in M32. |
 
 `:Pico8CartInfo` requests a fresh value asynchronously and notifies the same
@@ -311,8 +340,9 @@ The tests create temporary carts and exercise config resolution, command-line
 overrides, cart and include roots, attachment without a shipped config, unsaved
 includes, managed detach, multiple carts, PNG opening, glyph insertion, cached
 cart info and statusline text, include and PNG cart resolution, refresh
-debouncing and coalescing, the cart commands, and fallback behavior. The CI
-workflow checks out the server and builds a test binary on Neovim 0.11 and 0.12.
+debouncing and coalescing, included-buffer comment settings and variables,
+`:Pico8OpenCart`, the cart commands, and fallback behavior. The CI workflow
+checks out the server and builds a test binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

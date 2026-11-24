@@ -42,6 +42,18 @@ local owner_cache = {}
 -- Only entries recorded here may be detached by the helper.
 local managed = {}
 
+-- PICO-8 comment settings for helper-managed includes. The target commentstring
+-- matches the stock Lua value; comments adds PICO-8's `//` leader so
+-- comment-aware formatting recognizes it.
+local PICO8_COMMENTS = ":---,:--,://"
+local PICO8_COMMENTSTRING = "-- %s"
+local LUA_COMMENTS = ":---,:--"
+local LUA_COMMENTSTRING = "-- %s"
+
+-- Comment option values changed by the helper, keyed by buffer number. Only
+-- options whose value the helper actually replaced are recorded.
+local comment_restore = {}
+
 -- One debounce timer and generation per cart being edited.
 local rescan_timers = {}
 local rescan_generations = {}
@@ -83,6 +95,89 @@ local function path_key(path)
     return path:lower()
   end
   return path
+end
+
+local function option_value(value)
+  return value or ""
+end
+
+local function is_stock_comments(value)
+  value = option_value(value)
+  return value == "" or value == LUA_COMMENTS
+end
+
+local function is_stock_commentstring(value)
+  value = option_value(value)
+  return value == "" or value == LUA_COMMENTSTRING
+end
+
+local function set_include_vars(bufnr, record)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  vim.b[bufnr].pico8_cart = record.cart_uri
+  vim.b[bufnr].pico8_cart_root = record.root_dir
+end
+
+local function clear_include_vars(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  vim.b[bufnr].pico8_cart = nil
+  vim.b[bufnr].pico8_cart_root = nil
+end
+
+-- Apply PICO-8 comment defaults only to options that still have a stock or
+-- empty value. A custom value is left untouched and never recorded. Exact
+-- PICO-8 values are treated as custom, so a module reload cannot claim them.
+local function apply_include_comments(bufnr)
+  if comment_restore[bufnr] ~= nil then
+    return
+  end
+  if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+    return
+  end
+
+  local comments = option_value(vim.bo[bufnr].comments)
+  local commentstring = option_value(vim.bo[bufnr].commentstring)
+  local previous = {}
+  if is_stock_comments(comments) and comments ~= PICO8_COMMENTS then
+    previous.comments = comments
+  end
+  if is_stock_commentstring(commentstring) and commentstring ~= PICO8_COMMENTSTRING then
+    previous.commentstring = commentstring
+  end
+  if next(previous) == nil then
+    return
+  end
+
+  if previous.comments ~= nil then
+    vim.bo[bufnr].comments = PICO8_COMMENTS
+  end
+  if previous.commentstring ~= nil then
+    vim.bo[bufnr].commentstring = PICO8_COMMENTSTRING
+  end
+  comment_restore[bufnr] = previous
+end
+
+-- Restore only values that are still the ones the helper set. A later user
+-- change is preserved. The record is removed even when the buffer unloaded
+-- before restore could run.
+local function restore_include_comments(bufnr)
+  local previous = comment_restore[bufnr]
+  if not previous then
+    return
+  end
+  comment_restore[bufnr] = nil
+  if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+    return
+  end
+  if previous.comments ~= nil and vim.bo[bufnr].comments == PICO8_COMMENTS then
+    vim.bo[bufnr].comments = previous.comments
+  end
+  if previous.commentstring ~= nil and vim.bo[bufnr].commentstring == PICO8_COMMENTSTRING then
+    vim.bo[bufnr].commentstring = previous.commentstring
+  end
 end
 
 local function read_lines(path)
@@ -408,6 +503,18 @@ local function forget_marker(bufnr, client_id)
   end
 end
 
+-- Forget every piece of helper-owned state for a buffer. Every managed detach
+-- path goes through here so buffer variables and comment values cannot outlive
+-- ownership.
+local function release_include(bufnr, record)
+  managed[bufnr] = nil
+  clear_include_vars(bufnr)
+  restore_include_comments(bufnr)
+  if record then
+    forget_marker(bufnr, record.client_id)
+  end
+end
+
 local function wait_initialized(client)
   if client and not client.initialized then
     vim.wait(5000, function()
@@ -682,6 +789,51 @@ function M.reload_png()
   end
 end
 
+local function is_cart_buffer(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return false
+  end
+  if vim.b[bufnr].pico8_virtual_cart == true then
+    return true
+  end
+  if vim.bo[bufnr].filetype == "pico8" then
+    return true
+  end
+  local name = vim.api.nvim_buf_get_name(bufnr)
+  if name == "" then
+    return false
+  end
+  if is_virtual(bufnr, name) then
+    return true
+  end
+  return name:lower():sub(-3) == ".p8"
+end
+
+function M.open_cart()
+  if M.disabled then
+    notify("helper is disabled", vim.log.levels.INFO)
+    return
+  end
+  local bufnr = vim.api.nvim_get_current_buf()
+  if is_cart_buffer(bufnr) then
+    notify("current buffer is already a PICO-8 cart", vim.log.levels.INFO)
+    return
+  end
+  local record = managed[bufnr]
+  local cart_uri = record and record.cart_uri or nil
+  if type(cart_uri) ~= "string" or cart_uri == "" then
+    notify("no owning cart found for this buffer")
+    return
+  end
+  local ok, path = pcall(vim.uri_to_fname, cart_uri)
+  if not ok or type(path) ~= "string" or path == "" then
+    log_debug("pico-lsp: invalid owning cart URI: " .. tostring(cart_uri))
+    notify("no owning cart found for this buffer")
+    return
+  end
+  vim.cmd.edit(vim.fn.fnameescape(path))
+end
+
 -- Attach a cart-owned .lua buffer. A buffer that already has a pico_lsp client
 -- was either started by the user or is already managed; never add a second
 -- client or claim an attachment the helper did not make.
@@ -758,7 +910,8 @@ local function attach(bufnr)
     cart = cart,
     cart_uri = vim.uri_from_fname(cart),
   }
-  vim.b[bufnr].pico8_cart = managed[bufnr].cart_uri
+  set_include_vars(bufnr, managed[bufnr])
+  apply_include_comments(bufnr)
 end
 
 local function safe_attach(bufnr)
@@ -769,14 +922,10 @@ local function safe_attach(bufnr)
 end
 
 local function detach_managed(bufnr, record)
-  managed[bufnr] = nil
-  if vim.api.nvim_buf_is_valid(bufnr) then
-    vim.b[bufnr].pico8_cart = nil
-  end
+  release_include(bufnr, record)
   if not record then
     return
   end
-  forget_marker(bufnr, record.client_id)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
@@ -795,11 +944,9 @@ local function revalidate_managed()
     if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
       pending[#pending + 1] = bufnr
     else
-      local record = managed[bufnr]
-      if record then
-        forget_marker(bufnr, record.client_id)
-      end
-      managed[bufnr] = nil
+      -- The buffer unloaded before restore could run; drop the record without
+      -- writing options that may no longer belong to this buffer.
+      release_include(bufnr, managed[bufnr])
     end
   end
   table.sort(pending)
@@ -819,7 +966,7 @@ local function revalidate_managed()
           local previous_cart_uri = record.cart_uri
           record.cart = cart
           record.cart_uri = vim.uri_from_fname(cart)
-          vim.b[bufnr].pico8_cart = record.cart_uri
+          set_include_vars(bufnr, record)
           if previous_cart_uri ~= record.cart_uri then
             cart_module.owner_changed(bufnr, record.cart_uri)
           end
@@ -828,9 +975,7 @@ local function revalidate_managed()
           safe_attach(bufnr)
         end
       elseif not attached_client(bufnr, record.client_id) then
-        forget_marker(bufnr, record.client_id)
-        managed[bufnr] = nil
-        vim.b[bufnr].pico8_cart = nil
+        release_include(bufnr, record)
       end
     end
   end
@@ -867,10 +1012,12 @@ local function adopt_marked_clients()
                 cart = cart,
                 cart_uri = vim.uri_from_fname(cart),
               }
-              vim.b[bufnr].pico8_cart = managed[bufnr].cart_uri
+              set_include_vars(bufnr, managed[bufnr])
+              apply_include_comments(bufnr)
               adopted = true
             else
               client._pico8_helper_buffers[bufnr] = nil
+              release_include(bufnr, managed[bufnr])
               local ok, err = pcall(vim.lsp.buf_detach_client, bufnr, client.id)
               if not ok then
                 log_debug("pico-lsp: could not detach orphaned helper client: " .. tostring(err))
@@ -1078,6 +1225,10 @@ local function define_commands(enabled)
   vim.api.nvim_create_user_command("Pico8InsertGlyph", function(args)
     M.insert_glyph(args.args ~= "" and args.args or nil)
   end, { nargs = "?" })
+  vim.api.nvim_create_user_command("Pico8OpenCart", M.open_cart, {
+    nargs = 0,
+    desc = "Open the PICO-8 cart that includes this buffer",
+  })
 end
 
 function M.setup(opts)
@@ -1215,6 +1366,7 @@ function M.setup(opts)
       local bufnr = args.buf
       M.png_buffers[bufnr] = nil
       managed[bufnr] = nil
+      comment_restore[bufnr] = nil
       for _, client in ipairs(vim.lsp.get_clients({ name = "pico_lsp", _uninitialized = true })) do
         if client._pico8_helper_buffers then
           client._pico8_helper_buffers[bufnr] = nil
@@ -1249,10 +1401,7 @@ function M.setup(opts)
       local bufnr = data.bufnr or args.buf
       local record = bufnr and managed[bufnr]
       if record and record.client_id == data.client_id then
-        managed[bufnr] = nil
-        if vim.api.nvim_buf_is_valid(bufnr) then
-          vim.b[bufnr].pico8_cart = nil
-        end
+        release_include(bufnr, record)
       end
       if bufnr then
         forget_marker(bufnr, data.client_id)
