@@ -40,7 +40,95 @@ of `settings`. If the client supports `workspace/configuration`, the server
 pulls the `pico8` section after `initialized` and prefers pulled values per
 field.
 
-Avoid running `lua_ls` and `pico_lsp` on the same cart-owned `.lua` buffer.
+Do not run `lua_ls` and `pico_lsp` on the same cart-owned `.lua` buffer. See
+[coexisting with LuaLS](#coexisting-with-luals) for a scoping recipe.
+
+## Coexisting with LuaLS
+
+LuaLS (`lua_ls`/`lua-language-server`) is useful for ordinary Lua projects, but
+it does not understand PICO-8 shorthand, token limits, carts, or non-recursive
+includes. If both servers attach to a cart-owned `.lua` file, completion,
+hover, diagnostics, and code actions can appear twice.
+
+The plugin does not detach `lua_ls` for you. Scope it away from files that a
+nearby `.p8` cart includes. This recipe replaces the `lua_ls` `root_dir`
+callback; merge it with any existing `lua_ls` configuration and keep your
+usual root markers.
+
+```lua
+local function cart_owns_lua(path)
+  path = vim.fs.normalize(path)
+
+  local function same(a, b)
+    if vim.fn.has("win32") == 1 or vim.fn.has("mac") == 1 then
+      return a:lower() == b:lower()
+    end
+    return a == b
+  end
+
+  local function include_target(line)
+    local target = line:match('^%s*#include%s+"([^"]+)"')
+      or line:match("^%s*#include%s+'([^']+)'")
+      or line:match("^%s*#include%s+([^%s]+)")
+    if not target then
+      return nil
+    end
+    if target:match("%.p8$") or target:match("%.p8%.png$") then
+      target = target:gsub(":%x+$", "")
+    end
+    return target
+  end
+
+  for dir in vim.fs.parents(path) do
+    for _, cart in ipairs(vim.fn.globpath(dir, "*.p8", false, true)) do
+      local ok, lines = pcall(vim.fn.readfile, cart)
+      if ok then
+        for _, line in ipairs(lines) do
+          local target = include_target(line)
+          if target then
+            local full
+            if target:match("^/") or target:match("^%a:[/\\]") then
+              full = vim.fs.normalize(target)
+            else
+              full = vim.fs.normalize(vim.fs.joinpath(dir, target))
+            end
+            if same(full, path) then
+              return true
+            end
+          end
+        end
+      end
+    end
+  end
+  return false
+end
+
+vim.lsp.config("lua_ls", {
+  root_dir = function(bufnr, on_dir)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if name == "" or cart_owns_lua(name) then
+      return
+    end
+    on_dir(
+      vim.fs.root(bufnr, { ".luarc.json", ".luarc.jsonc", ".git" })
+        or vim.fs.dirname(vim.fs.normalize(name))
+    )
+  end,
+})
+```
+
+This declines `lua_ls` only for a `.lua` file that a nearby `.p8` cart actually
+includes. Unrelated Lua files still get `lua_ls`. If you prefer to disable
+`lua_ls` for a whole PICO-8 project directory, use a simpler directory check
+instead and accept that other Lua files in that directory will lose `lua_ls`.
+
+`:checkhealth pico_lsp` warns when both clients are attached to a
+helper-managed include. Use `:lua =vim.lsp.get_clients({ bufnr = 0 })` to confirm
+that only `pico_lsp` remains.
+
+The `pico8.attachLua` setting in the `pico-lsp` configuration reference is a VS
+Code extension setting. Neovim attachment is owned by the native config and the
+include helper.
 
 ## Included `.lua` files
 
@@ -121,6 +209,27 @@ Managed includes expose `b:pico8_cart` (the owning cart URI) and
 buffer is already a cart on a `.p8` or `.p8.png` buffer, and reports no owner on
 an unrelated buffer.
 
+## Standalone `.lua` carts
+
+A standalone `.lua` cart is a `.lua` file that is not included by a `.p8` cart.
+The include helper intentionally ignores unrelated `.lua` files, so it does not
+attach a client for one automatically.
+
+For a best-effort manual path, open the file and assign the PICO-8 filetype:
+
+```vim
+:set filetype=pico8
+```
+
+The shipped `pico_lsp` config then attaches with the file's directory as the
+workspace root, and the normal LSP features work on that buffer. The helper
+still does not manage it, `:Pico8OpenCart` reports no owner, and the compressed
+budget segment is usually `unavailable`. `:Pico8Tabs` treats the buffer as a
+single `main` tab.
+
+Standalone `.lua` carts are not detected automatically. If the manual path does
+not behave as expected, use a text `.p8` cart for full cart-aware analysis.
+
 ## Navigating includes
 
 The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
@@ -159,11 +268,12 @@ preserved. If you set a global `includeexpr`, `gf` uses your expression.
 
 ## Formatting and include links
 
-The server advertises standard range formatting, so Neovim sets `formatexpr`
-automatically for `pico8` buffers. `gq` formats the complete lines covered by
-the selection through `textDocument/rangeFormatting`; a single-line selection
-formats that line. The server formats the whole document for context but returns
-only the selected lines.
+A server build with M33 advertises standard range formatting, so Neovim sets
+`formatexpr` automatically for `pico8` buffers. `gq` formats the complete lines
+covered by the selection through `textDocument/rangeFormatting`; a single-line
+selection formats that line. `pico-lsp` v1.8.1 predates M33, so with that
+release `gq` is not configured, and `gx` below is unavailable. The server
+formats the whole document for context but returns only the selected lines.
 
 If formatting would change the line count, the request is refused and the
 buffer is left unchanged. Format the whole document instead:
@@ -264,6 +374,12 @@ The server inserts the canonical Unicode spelling for the chosen byte because
 it cannot inspect custom font pixels. A custom entry uses its configured name
 and overrides a built-in entry that shares the same byte.
 
+Inserted glyphs are Unicode characters. The terminal font must render them; a
+box or blank cell means the font lacks that glyph. Use `:Pico8InsertGlyph` or a
+literal uppercase letter when that happens. The Shift maps already fall back to
+the literal key outside Lua code, in `#include` paths, without a client, or
+after a failed catalog request.
+
 ### Catalog cache and prefetch
 
 The client caches the full `pico8/glyphs` catalog per `pico_lsp` client and
@@ -318,10 +434,15 @@ The plugin ships `syntax/pico8.vim` and the editor-oriented Tree-sitter grammar
 under `vendor/tree-sitter-pico8`. The grammar highlights cart headers, sections,
 tab markers, dialect syntax, and non-code payloads.
 
+`nvim-treesitter` does not install this grammar, and `:TSInstall pico8` is not
+supported. Use `:Pico8InstallParser` instead.
+
 See [installation](install.md#tree-sitter) for the parser installer, source
-overrides, compiler selection, and the manual build fallback. `:Pico8InstallParser`
-installs the parser and queries but does not start highlighting; add the
-documented `FileType pico8` autocmd if you want it automatically.
+overrides, compiler selection, removal, and the manual build fallback.
+`:Pico8InstallParser` installs the parser and queries but does not start
+highlighting; add the documented `FileType pico8` autocmd if you want it
+automatically. MSVC's `cl` is not supported; Windows builds are best-effort and
+are not covered by CI.
 
 The Vim syntax file remains the no-compiler fallback. LSP semantic tokens cover
 Lua code, while the syntax file also highlights non-code `.p8` sections.

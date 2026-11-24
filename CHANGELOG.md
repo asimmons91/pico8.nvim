@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-24
+
 - Extract the existing Neovim client from `pico-lsp/editors/nvim`.
 - Add native `lsp/pico_lsp.lua` and lazy.nvim-friendly `setup`.
 - Complete M25: cart-directory roots, one-call activation, merged helper
@@ -41,3 +43,8 @@
   and macOS CI coverage.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.
+- Complete M36: add the pinned v0.1.0 install path, five-minute quickstart,
+  demo cart, real terminal capture, LuaLS coexistence recipe, standalone
+  `.lua` guidance, known limitations, help tags, support/security/contribution
+  files, release checklist, and documentation link/tag checks. Mason and the
+  LazyVim extra remain M35.

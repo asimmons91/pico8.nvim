@@ -10,9 +10,10 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, M28, M29, M30, M31, M32, M33, and M34 are complete. M35
-  (Mason and LazyVim extra) is proposed. M33 is server-owned in `pico-lsp`;
-  this repository consumes its standard LSP hooks and tests them.
+- M25, M26, M27, M28, M29, M30, M31, M32, M33, M34, and M36 are complete.
+  M35 (Mason and LazyVim extra) is proposed. M36 is the manual launch path and
+  deliberately excludes Mason and LazyVim publication. M33 is server-owned in
+  `pico-lsp`; this repository consumes its standard LSP hooks and tests them.
 - The M27 client module enables the budget code lens and inlay-hint display for
   `pico8` buffers, with `codelens`/`inlay_hints` setup options and
   `:Pico8ToggleInlayHints`. The shipped `lsp/pico_lsp.lua` enables the display
@@ -82,6 +83,12 @@
   directory. The command is registered by `setup()` (including a disabled
   helper) and by the shipped `lsp/pico_lsp.lua`. Tests are in
   `tests/treesitter.lua` with an isolated `XDG_DATA_HOME`.
+- M36 adds the end-user launch path: pinned v0.1.0 and v1.8.1 install docs,
+  five-minute quickstart, demo cart, terminal capture, include-aware LuaLS
+  recipe, standalone `.lua` guidance, known limitations, support/security/
+  contribution files, release checklist, and `tests/docs.lua`. `pico-lsp`
+  v1.8.1 predates M33, so `gq`/`gx` are documented as requiring a newer server
+  build. Mason and the LazyVim extra remain M35.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
@@ -96,11 +103,13 @@
 ## Source of truth
 
 - `docs/ROADMAP.md` is the plugin roadmap.
-- `docs/milestones/M25-*.md` through `docs/milestones/M32-*.md` and
-  `docs/milestones/M34-*.md` are the client milestone specs. M33 lives in
-  `pico-lsp`.
-- `docs/install.md`, `docs/usage.md`, `docs/configuration.md`, and
-  `docs/troubleshooting.md` are user documentation.
+- `docs/milestones/M25-*.md` through `docs/milestones/M32-*.md`,
+  `docs/milestones/M34-*.md`, and `docs/milestones/M36-*.md` are the client
+  milestone specs. M33 lives in `pico-lsp`. M36 is the onboarding/release
+  milestone and intentionally excludes M35's Mason and LazyVim work.
+- `docs/getting-started.md`, `docs/install.md`, `docs/usage.md`,
+  `docs/configuration.md`, and `docs/troubleshooting.md` are user
+  documentation. `docs/release-checklist.md` is the release process.
 - `vendor/tree-sitter-pico8/` is a vendored copy of the editor grammar. Do not
   edit it here; regenerate and test it in `pico-lsp` and re-vendor.
 - The historical `pico-lsp/editors/nvim` copy is not maintained here. This
@@ -116,11 +125,14 @@
   installer test its own temporary `XDG_DATA_HOME`.
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
+- `nvim --headless --clean -u NONE -l tests/docs.lua` checks local Markdown
+  links, anchors, and help tags.
 - `:helptags doc` regenerates the help tags when manually testing.
 - `git diff --check` is the minimum text sanity check.
-- CI installs Neovim 0.11 and 0.12 on Ubuntu, builds or downloads a
-  `pico-lsp` test binary, and runs the headless tests. A macOS job runs the
-  Tree-sitter installer test with the system compiler.
+- CI installs Neovim 0.11.4 and 0.12.6 on Ubuntu, builds or downloads a
+  `pico-lsp` test binary, and runs the headless tests. A separate docs job
+  checks local links, anchors, and help tags. A macOS job runs the Tree-sitter
+  installer test with the system compiler.
 
 ## Testing rules
 

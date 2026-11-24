@@ -2,18 +2,38 @@
 
 ## Requirements
 
-- Neovim 0.11 or newer.
-- `pico-lsp` installed and executable.
+- Neovim 0.11.4 or newer. This release is tested with 0.11.4 and 0.12.6;
+  newer patch releases are not individually claimed as tested.
+- `pico-lsp` v1.8.1 or newer, installed and executable.
 - Optional: a C compiler for `:Pico8InstallParser` or manual Tree-sitter
   parsing. The Vim syntax file works without one.
+- PICO-8 0.2.7 if you want to run carts. PICO-8 is not required to edit carts,
+  and this plugin does not run them.
+
+## Compatibility
+
+| `pico8.nvim` | `pico-lsp` | Tested Neovim |
+|---|---|---|
+| v0.1.0 | v1.8.1 (minimum) | 0.11.4, 0.12.6 |
+
+A plugin release documents the minimum `pico-lsp` release it was tested
+against. The client may work with newer server versions, but the pinned pair
+above is the supported launch combination.
+
+`pico-lsp` v1.8.1 predates the standard range-formatting and document-link
+capabilities added in M33. Core editing, cart budget, includes, glyphs, PNG,
+health, and Tree-sitter work with v1.8.1; `gq` and Neovim 0.12 `gx` require a
+newer server build. `gf` remains the fallback when those capabilities are
+absent.
 
 ## Install the server
 
-Use a release binary from the
-[`pico-lsp` releases](https://github.com/asimmons91/pico-lsp/releases), or:
+Download the archive for your OS and architecture from the
+[`pico-lsp` v1.8.1 release](https://github.com/asimmons91/pico-lsp/releases/tag/v1.8.1),
+or install with Go 1.27.4 or newer:
 
 ```sh
-go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@latest
+go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@v1.8.1
 ```
 
 Verify it:
@@ -22,10 +42,28 @@ Verify it:
 pico-lsp --version
 ```
 
+The [`pico-lsp` installation guide](https://github.com/asimmons91/pico-lsp/blob/main/docs/install.md)
+is authoritative for:
+
+- Linux, macOS, and Windows release archives;
+- `checksums.txt` verification;
+- the Windows `.zip` and `%LOCALAPPDATA%` layout;
+- macOS Gatekeeper notes for unsigned binaries;
+- offline and air-gapped installs;
+- `GOBIN`/`PATH` setup after `go install`;
+- server upgrade and uninstall.
+
 The plugin looks for `pico-lsp` on `PATH`. To use another binary, set `cmd` in
 the plugin setup, `vim.g.pico_lsp_cmd`, or `PICO_LSP_BIN`. The shipped config
 checks `vim.g.pico_lsp_cmd`, then `PICO_LSP_BIN`, then `pico-lsp`; a `setup`
 `cmd` or a later user `vim.lsp.config` call overrides that value.
+
+The shell and Neovim can resolve different binaries when Neovim is launched
+from a GUI. Run `:checkhealth pico_lsp` to see the executable Neovim will use.
+The health probe is authoritative; `pico-lsp --version` in a shell is not.
+
+Mason packaging is not available yet. It remains distribution work in the
+[roadmap](ROADMAP.md).
 
 ## Install the plugin
 
@@ -37,6 +75,7 @@ Add `lua/plugins/pico8.lua`:
 return {
   {
     "asimmons91/pico8.nvim",
+    tag = "v0.1.0",
     main = "pico_lsp",
     lazy = false,
     opts = {},
@@ -48,7 +87,18 @@ return {
 before the first `.p8` buffer opens. `opts = {}` runs
 `require("pico_lsp").setup({})`, which enables the client by default.
 
-Set `opts = { lsp = false }` if you manage `vim.lsp.enable` yourself.
+Set `opts = { lsp = false }` if you manage `vim.lsp.enable` yourself. There is no
+`plugin/` entry: commands, the include helper, and PNG auto-open are installed
+by `setup()`, not by loading the plugin alone.
+
+### vim.pack (Neovim 0.12+)
+
+```lua
+vim.pack.add({
+  { src = "https://github.com/asimmons91/pico8.nvim", version = "v0.1.0" },
+})
+require("pico_lsp").setup()
+```
 
 ### Vanilla Neovim
 
@@ -57,8 +107,7 @@ vim.opt.runtimepath:append("/path/to/pico8.nvim")
 require("pico_lsp").setup()
 ```
 
-The shipped `lsp/pico_lsp.lua` requests `pico8` buffers and uses the cart
-directory as the workspace root.
+Keep `filetype plugin on` enabled for the `ftplugin` options.
 
 ### Local development
 
@@ -143,6 +192,9 @@ run leaves the previous parser and queries in place. After a forced rebuild in
 a session that already loaded the parser, restart Neovim to load the new
 binary; a first install is usable immediately.
 
+`nvim-treesitter` does not install this grammar, and `:TSInstall pico8` is not
+supported. Use `:Pico8InstallParser` instead.
+
 The installer reads the grammar directory from
 `vim.g.pico8_treesitter_source`, then `PICO_LSP_TREE_SITTER`, then the plugin's
 `vendor/tree-sitter-pico8` directory. An explicit override must contain:
@@ -158,7 +210,8 @@ queries/textobjects.scm
 It uses `$CC` when set, otherwise `cc`, then `clang`; `$CC` is a single
 executable path, not a shell command. Compilation is bounded to 60 seconds and
 uses an atomic rename so a partial `.so` is never installed. The installer does
-not use the network or require the `tree-sitter` CLI.
+not use the network or require the `tree-sitter` CLI. MSVC's `cl` is not
+supported; Windows builds are best-effort and are not covered by CI.
 
 Start it for `.p8` buffers (the installer does not start it automatically):
 
@@ -170,6 +223,17 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 ```
+
+### Remove the parser
+
+Run `:lua =vim.fn.stdpath("data")` to find the data directory, then delete:
+
+```text
+<data>/site/parser/pico8.so      (.dll on Windows)
+<data>/site/queries/pico8/
+```
+
+Removing the plugin does not remove these files.
 
 ### Manual build fallback
 
@@ -205,10 +269,10 @@ filetype detection is registered. It never installs or starts the parser.
    client features, helper commands, managed includes, and Tree-sitter status.
    It never starts clients or changes configuration.
 
-2. Open a cart:
+2. Open the demo cart:
 
    ```sh
-   nvim tests/fixtures/smoke.p8
+   nvim examples/hello.p8
    ```
 
 3. Check the filetype and client:
@@ -219,10 +283,44 @@ filetype detection is registered. It never installs or starts the parser.
    :lua =vim.lsp.get_clients({ bufnr = 0 })
    ```
 
-4. Open an included `.lua` file and confirm the helper attaches.
+4. Open `examples/hello_lib.lua` with `gf` and confirm the helper attaches.
 
-5. Run the headless test suite:
+If the cart does not attach, read
+[troubleshooting](troubleshooting.md#client-does-not-attach).
 
-   ```sh
-   PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
-   ```
+## Upgrade and uninstall
+
+### Upgrade
+
+1. Change the plugin tag to the newer release and update it with your plugin
+   manager.
+2. Install the matching `pico-lsp` release and verify it with
+   `:checkhealth pico_lsp`.
+3. Restart Neovim, or use `:lsp restart` on Neovim 0.12+.
+4. Re-run `:Pico8InstallParser` after a plugin update that changes the vendored
+   grammar.
+
+### Uninstall
+
+1. Remove the plugin from your plugin manager.
+2. Remove the parser and queries if you installed them:
+   `stdpath("data")/site/parser/pico8.*` and
+   `stdpath("data")/site/queries/pico8/`.
+3. Remove the `pico-lsp` binary separately. Uninstalling the plugin does not
+   remove the server.
+
+## Development checks
+
+The end-user verification path is `:checkhealth pico_lsp` plus the demo cart.
+The headless test suite is a contributor check and needs an installed server:
+
+```sh
+PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
+```
+
+The release process is in [release-checklist](release-checklist.md). The
+documentation checks run with:
+
+```sh
+nvim --headless --clean -u NONE -l tests/docs.lua
+```
