@@ -537,13 +537,14 @@ wait_for(function()
   local info = api().cart_info(owner_lib_buf)
   return info ~= nil and info.rootUri == owner_b_uri
 end, "the cart cache did not follow the new owner")
+local owner_handled_before = cart().handled_count()
 -- Let the delayed old-owner response arrive.
 wait_for(function()
   return owner_stale_done
 end, "the delayed old-owner response did not run", 4000)
-vim.wait(200, function()
-  return false
-end)
+wait_for(function()
+  return cart().handled_count() > owner_handled_before
+end, "the delayed old-owner response did not reach the handler", 4000)
 restore_owner()
 local owner_b_after = api().cart_info(owner_lib_buf)
 if not owner_b_after or owner_b_after.rootUri ~= owner_b_uri then
@@ -577,13 +578,14 @@ local restore_fake = patch_request(owner_fake_client, function(original, self, m
     end
   end, bufnr)
 end)
+local fake_handled_before = cart().handled_count()
 api().refresh_cart_info(owner_lib_buf)
 wait_for(function()
   return fake_injected
 end, "the fake old-owner response did not run", 4000)
-vim.wait(200, function()
-  return false
-end)
+wait_for(function()
+  return cart().handled_count() > fake_handled_before
+end, "the fake old-owner response did not reach the handler", 4000)
 restore_fake()
 local owner_fake_after = api().cart_info(owner_lib_buf)
 if not owner_fake_after or owner_fake_after.rootUri ~= owner_b_uri then
@@ -728,12 +730,13 @@ wait_for(function()
   return info ~= nil and info.tokens > order_baseline.tokens
 end, "the newer cart refresh did not apply")
 local order_newer_tokens = api().cart_info(order_cart_buf).tokens
+local order_handled_before = cart().handled_count()
 wait_for(function()
   return order_stale_done
 end, "the slow include response did not run", 4000)
-vim.wait(200, function()
-  return false
-end)
+wait_for(function()
+  return cart().handled_count() > order_handled_before
+end, "the slow include response did not reach the handler", 4000)
 restore_order()
 if api().cart_info(order_cart_buf).tokens ~= order_newer_tokens then
   fail("an older include response overwrote the newer cart cache")
@@ -1306,6 +1309,7 @@ local restore_late = patch_request(late_client, function(original, self, method,
   end
   return original(self, method, params, handler, bufnr)
 end)
+local late_handled_before = cart().handled_count()
 api().refresh_cart_info(include_lib_buf)
 vim.lsp.buf_detach_client(include_lib_buf, late_client.id)
 wait_for(function()
@@ -1317,9 +1321,9 @@ end
 wait_for(function()
   return late_response_done
 end, "the delayed late response did not run", 4000)
-vim.wait(200, function()
-  return false
-end)
+wait_for(function()
+  return cart().handled_count() > late_handled_before
+end, "the delayed late response did not reach the handler", 4000)
 restore_late()
 if api().cart_info(include_lib_buf) ~= nil then
   fail("a late response resurrected a detached include cache")
@@ -1351,14 +1355,15 @@ local restore_wipe_late = patch_request(wipe_late_client, function(original, sel
   end
   return original(self, method, params, handler, bufnr)
 end)
+local wipe_handled_before = cart().handled_count()
 api().refresh_cart_info(include_lib_buf)
 vim.cmd("bwipeout! " .. include_lib_buf)
 wait_for(function()
   return wipe_late_done
 end, "the wiped-buffer late response did not run", 4000)
-vim.wait(200, function()
-  return false
-end)
+wait_for(function()
+  return cart().handled_count() > wipe_handled_before
+end, "the wiped-buffer late response did not reach the handler", 4000)
 restore_wipe_late()
 if vim.v.errmsg ~= wipe_errmsg_before and vim.v.errmsg:find("Invalid buffer id", 1, true) then
   fail("a wiped-buffer response raised Invalid buffer id")

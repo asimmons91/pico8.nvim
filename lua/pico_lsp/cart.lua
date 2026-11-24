@@ -41,6 +41,9 @@ local debounce_generations = {}
 local group = nil
 local commands_defined = false
 local last_error = nil
+-- Test/health observability: number of scheduled responses the handler has
+-- entered. Tests use this instead of fixed sleeps for late-response guards.
+local handled_count = 0
 -- Incremented by shutdown so scheduled callbacks from the previous setup do not
 -- repopulate a cleared cache.
 local epoch = 0
@@ -504,6 +507,7 @@ handle_response = function(key, state, generation, attempt, sequence, bufnr, uri
   if root_state[key] ~= state or state.attempt ~= attempt then
     return
   end
+  handled_count = handled_count + 1
 
   state.inflight = false
   if state.timer then
@@ -1050,6 +1054,10 @@ end
 
 function M.last_error()
   return last_error
+end
+
+function M.handled_count()
+  return handled_count
 end
 
 -- Save and InsertLeave autocmds run alongside Neovim's LSP autocmds. Defer the
