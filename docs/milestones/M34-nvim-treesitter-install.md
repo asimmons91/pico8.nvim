@@ -1,11 +1,12 @@
 # M34 — Neovim Tree-sitter Installer and Distribution
 
-**Status:** Proposed — not started.
+**Status:** Done — installer module, command, tests, CI, and documentation are
+complete.
 
 **Depends on:** pico-lsp M6 (server features), pico-lsp M12 (Tree-sitter
 grammar), M25 (drop-in configuration)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-24.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -26,29 +27,30 @@ machine with a C compiler. The command reports the parser path and query
 directory. Opening `tests/fixtures/smoke.p8` and running
 `:lua vim.treesitter.start(0, "pico8")` highlights the cart. Running the command
 again says the parser is up to date; `:Pico8InstallParser!` rebuilds it. With no
-`cc`, the command shows an actionable error and the manual instructions.
+`$CC`, `cc`, or `clang`, the command shows an actionable error and the manual
+instructions.
 
-## Decisions proposed
+## Decisions
 
 | ID | Decision | Choice |
 |---|---|---|
 | D1 | Build source | Use the committed `vendor/tree-sitter-pico8/src/parser.c` and `src/scanner.c`; do not require the tree-sitter CLI or network access. |
-| D2 | Compiler | Use `$CC` when set, otherwise `cc`. Detect a missing compiler and show the manual path. Windows builds are best-effort with the user's `cc`/clang and are not a CI requirement. |
+| D2 | Compiler | Use `$CC` as a single executable path when set, otherwise `cc`, then `clang`, on every platform. Detect a missing compiler and show the manual path. Windows builds are best-effort with the user's `cc`/clang and are not a CI requirement. |
 | D3 | Install location | Install `pico8.so` under `stdpath("data")/site/parser` and queries under `stdpath("data")/site/queries/pico8`, which are on Neovim's default runtimepath. |
 | D4 | Session registration | Call `vim.treesitter.language.add("pico8", { path = ... })` after a successful build so the current session works without a restart. |
-| D5 | Idempotence | Skip the build when the installed parser is newer than both sources, unless `!` is used. Copy queries when missing or changed. |
+| D5 | Idempotence | Skip the build when the installed parser is at least as new as both sources, unless `!` is used. Copy queries when missing or changed. |
 | D6 | Atomicity | Build into a temporary file in the destination directory and rename it into place only after a successful compiler exit. Do not leave a partial `.so`. |
 | D7 | Start behavior | Do not start Tree-sitter automatically on every `.p8` buffer. Document the one-line `FileType` autocmd and offer an optional start after install only if the current buffer is `pico8`. |
 | D8 | Distribution | Keep the installer in this plugin and vendor the committed grammar under `vendor/tree-sitter-pico8`. Do not add an `nvim-treesitter` parser registry dependency. |
 | D9 | Fallback | Keep `syntax/pico8.vim` and the manual compile/copy instructions; the installer is a convenience, not a requirement. |
 | D10 | Tests | Build and load the parser in a temporary `XDG_DATA_HOME` on Linux; macOS covers compilation where the CI image has a compiler; Windows is manual/documented. |
 
-### Open decision
+### Deferred follow-up
 
-**D8 follow-up:** the skeleton vendors the parser sources so the installer can
-work without network access. If the grammar changes often, publishing prebuilt
-parser assets per OS/architecture would remove the C compiler requirement but
-add a release matrix. Revisit after M34 ships.
+**D8 follow-up:** the installer vendors the parser sources so it can work
+without network access. Prebuilt parser assets per OS/architecture were
+deferred after M34 shipped; if the grammar changes often, they would remove the
+C compiler requirement but add a release matrix.
 
 ## Scope
 
@@ -120,8 +122,9 @@ the override variables. Do not attempt a partial install.
 
 ### 3. Compilation
 
-- Determine the compiler from `$CC`, then `cc`. On Windows, try `cc` and then
-  `clang`; document that MSVC's `cl` is not supported by this installer.
+- Determine the compiler from `$CC`, then `cc`, then `clang` on every platform.
+  `$CC` is one executable path, not a shell command. Document that MSVC's `cl`
+  is not supported by this installer.
 - Build command for POSIX:
 
   ```sh
@@ -144,8 +147,8 @@ the override variables. Do not attempt a partial install.
 
 - Compare the installed parser's mtime with the newer of `parser.c` and
   `scanner.c`.
-- If the installed parser exists and is newer, skip compilation and report
-  "up to date".
+- If the installed parser exists and is at least as new as the sources, skip
+  compilation and report "up to date".
 - If any query file is missing or differs, copy it; query copying is cheap.
 - `:Pico8InstallParser!` forces compilation even when the parser is up to date.
 - A failed forced rebuild must not delete the previous working parser.
@@ -245,19 +248,39 @@ After a successful build or when the parser is already up to date:
   repository tests only compilation, loading, and query installation.
 - No network access.
 
+## Implementation notes
+
+- `lua/pico_lsp/treesitter.lua` owns source discovery, compiler resolution,
+  atomic builds, query repair, runtimepath insertion, and registration.
+  `install({ force = true, timeout_ms = ... })` returns a result table or an
+  actionable error and never notifies; the command reports the result.
+- The command is registered by `setup()` even when the helper is disabled and
+  by `lsp/pico_lsp.lua` for base-config users. Requiring the module registers
+  the command but builds nothing.
+- Compiler lookup is `$CC`, `cc`, then `clang`. `$CC` is one executable path;
+  a wrapper script is the supported way to add arguments such as `ccache`.
+- A forced rebuild in a session that already loaded the parser reports that a
+  restart is needed; a first install is registered in the current session.
+- `tests/treesitter.lua` runs under an isolated `XDG_DATA_HOME` from
+  `tests/run.sh`. It covers build/load/start, idempotence, query repair, forced
+  rebuilds, missing and incomplete sources, missing compilers, compiler
+  failures, bounded stderr, timeouts, registration failures, and recovery.
+- The macOS CI job runs the installer test with the system compiler. The Linux
+  matrix runs it through `tests/run.sh`.
+
 ## Exit criteria
 
-- [ ] `:Pico8InstallParser` builds and installs the committed parser and
+- [x] `:Pico8InstallParser` builds and installs the committed parser and
       queries without manual `cc`/`cp` commands.
-- [ ] The current Neovim session can load and start the `pico8` parser after
+- [x] The current Neovim session can load and start the `pico8` parser after
       installation.
-- [ ] Repeated runs are idempotent; `!` forces a safe rebuild.
-- [ ] Missing sources, missing compilers, compiler failures, and write failures
+- [x] Repeated runs are idempotent; `!` forces a safe rebuild.
+- [x] Missing sources, missing compilers, compiler failures, and write failures
       produce actionable errors.
-- [ ] A failed rebuild leaves the previous parser usable.
-- [ ] The manual compile path and Vim syntax fallback remain documented.
-- [ ] Headless tests and CI cover the installer on supported platforms.
-- [ ] Distribution guidance covers runtimepath and plugin-manager installs.
+- [x] A failed rebuild leaves the previous parser usable.
+- [x] The manual compile path and Vim syntax fallback remain documented.
+- [x] Headless tests and CI cover the installer on supported platforms.
+- [x] Distribution guidance covers runtimepath and plugin-manager installs.
 
 ## Risks
 

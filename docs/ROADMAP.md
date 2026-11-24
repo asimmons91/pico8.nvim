@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M32 and M33 are complete. The existing Neovim client surface is
-present and M34 remains proposed.
+**Status:** M32, M33, and M34 are complete. The existing Neovim client surface
+is present; M35 remains proposed.
 
 **Last updated:** 2026-11-24
 
@@ -73,7 +73,11 @@ client source.
   code-lens refresh are consumed through Neovim's standard `formatexpr`, `gx`,
   and refresh support. `tests/standard_hooks.lua` covers `gq`, `gx` on Neovim
   0.12, and the unchanged-buffer refusal path.
-- M34 is proposed.
+- M34 is complete: `:Pico8InstallParser` builds the vendored parser and
+  queries into `stdpath("data")/site` with an atomic install, repairs changed
+  queries, registers the language for the current session, and keeps the
+  previous parser on failure. `!` forces a rebuild. Base-config and setup users
+  both get the command, and macOS CI covers the build.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
 ## Milestones
@@ -90,7 +94,7 @@ client source.
 | M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Done |
 | M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Done |
 | M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | Done |
-| M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Proposed |
+| M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Done |
 | M35 | Mason and LazyVim extra | Mason package, LazyVim extra, plugin release automation | M25–M32, M34 | Proposed |
 
 ## Recommended order
@@ -103,9 +107,9 @@ client source.
    navigation and direct PNG opening (complete). **M31** — cached glyph input,
    byte forms, and filtered picker (complete). **M32** — `:checkhealth
    pico_lsp` (complete). **M33** — standard range formatting, document links,
-   and code-lens refresh (complete).
-3. **M34** — parser installer.
-4. **M35** — Mason and LazyVim distribution.
+   and code-lens refresh (complete). **M34** — Tree-sitter installer
+   (complete).
+3. **M35** — Mason and LazyVim distribution.
 
 The client falls back to `gf` when an older server does not advertise document
 links or range formatting.
@@ -129,7 +133,8 @@ links or range formatting.
   0.12.
 - Tests cover attachment, includes, `gf` navigation, PNG carts and auto-open,
   glyph cache and prefetch behavior, byte insertion, picker filtering,
-  completion, commands, health checks, and failure paths.
+  completion, commands, health checks, Tree-sitter installation and failure
+  paths, and fallback behavior.
 - Server tests, Go fuzz tests, and LSP e2e tests remain in `pico-lsp`.
 - Manual checks for LazyVim, lazy.nvim, and vanilla `runtimepath` are recorded
   in the milestone checklist.
@@ -230,10 +235,19 @@ cart root; the server skips code-lens refresh when `pico8.limits.codeLens` is
 false; and the headless client test uses `gq` on Neovim 0.11+ and `gx` with a
 stubbed `vim.ui.open` only on Neovim 0.12+.
 
+M34's implementation choices were confirmed on 2026-11-24: the installer is
+registered by both `setup()` (including a disabled helper) and the shipped
+`lsp/pico_lsp.lua`, because it is independent of the LSP; compiler lookup is
+`$CC`, then `cc`, then `clang` on every platform, and `$CC` is one executable
+path rather than a shell command; a forced rebuild in a session that already
+loaded the parser reports that a restart is needed; and macOS CI runs the
+installer test with the system compiler. Prebuilt parser assets remain deferred
+until after M34 ships.
+
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
-2. **Parser distribution:** vendored sources (current) versus prebuilt parser
-   assets per OS/architecture.
+2. **Parser distribution:** vendored sources are used through M34. Prebuilt
+   parser assets per OS/architecture remain a follow-up decision.
 3. **LazyVim extra:** contribute upstream after the plugin and Mason package
    are stable, rather than treating a plugin as an extra.
 4. **Statusline surface:** resolved in M28 — cached `cart_info`/`cart_status`

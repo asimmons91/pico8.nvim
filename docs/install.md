@@ -4,7 +4,8 @@
 
 - Neovim 0.11 or newer.
 - `pico-lsp` installed and executable.
-- Optional: a C compiler for manual Tree-sitter parsing.
+- Optional: a C compiler for `:Pico8InstallParser` or manual Tree-sitter
+  parsing. The Vim syntax file works without one.
 
 ## Install the server
 
@@ -120,8 +121,59 @@ before opening carts.
 
 ## Tree-sitter
 
-The Vim syntax file works without a compiler. To use the editor-only
-Tree-sitter grammar manually:
+The Vim syntax file works without a compiler. To build and install the optional
+editor-only Tree-sitter grammar from the vendored sources:
+
+```vim
+:Pico8InstallParser
+```
+
+The command:
+
+- compiles `vendor/tree-sitter-pico8/src/parser.c` and `src/scanner.c`;
+- installs `stdpath("data")/site/parser/pico8.so` (`.dll` on Windows);
+- copies `highlights.scm`, `indents.scm`, and `textobjects.scm` to
+  `stdpath("data")/site/queries/pico8/`;
+- adds `stdpath("data")/site` to `runtimepath` once, if needed;
+- registers the language in the current session.
+
+Re-running the command repairs missing or changed query files and skips an
+up-to-date parser. `:Pico8InstallParser!` forces a rebuild. A failed compiler
+run leaves the previous parser and queries in place. After a forced rebuild in
+a session that already loaded the parser, restart Neovim to load the new
+binary; a first install is usable immediately.
+
+The installer reads the grammar directory from
+`vim.g.pico8_treesitter_source`, then `PICO_LSP_TREE_SITTER`, then the plugin's
+`vendor/tree-sitter-pico8` directory. An explicit override must contain:
+
+```text
+src/parser.c
+src/scanner.c
+queries/highlights.scm
+queries/indents.scm
+queries/textobjects.scm
+```
+
+It uses `$CC` when set, otherwise `cc`, then `clang`; `$CC` is a single
+executable path, not a shell command. Compilation is bounded to 60 seconds and
+uses an atomic rename so a partial `.so` is never installed. The installer does
+not use the network or require the `tree-sitter` CLI.
+
+Start it for `.p8` buffers (the installer does not start it automatically):
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "pico8",
+  callback = function()
+    pcall(vim.treesitter.start, 0, "pico8")
+  end,
+})
+```
+
+### Manual build fallback
+
+If a compiler is unavailable, or you prefer to manage the parser yourself:
 
 ```sh
 mkdir -p ~/.local/share/nvim/site/parser
@@ -134,19 +186,9 @@ mkdir -p ~/.local/share/nvim/site/queries/pico8
 cp vendor/tree-sitter-pico8/queries/*.scm ~/.local/share/nvim/site/queries/pico8/
 ```
 
-Start it for `.p8` buffers:
-
-```lua
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "pico8",
-  callback = function()
-    pcall(vim.treesitter.start, 0, "pico8")
-  end,
-})
-```
-
-`:Pico8InstallParser` is proposed in
-[M34](milestones/M34-nvim-treesitter-install.md).
+Use the same parser and query directories as the installer so Neovim finds
+them through the default `runtimepath`. The committed parser targets ABI 14 for
+Neovim 0.11+.
 
 `:checkhealth pico_lsp` reports whether the parser loads and whether `pico8`
 filetype detection is registered. It never installs or starts the parser.

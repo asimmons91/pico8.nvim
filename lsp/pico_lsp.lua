@@ -10,6 +10,10 @@
 -- anything until a pico_lsp client attaches.
 pcall(require, "pico_lsp.cart")
 
+-- Register :Pico8InstallParser for base-config users. Requiring the module only
+-- defines the command; it does not build or install anything until invoked.
+pcall(require, "pico_lsp.treesitter")
+
 local function command()
   local configured = vim.g.pico_lsp_cmd
   if type(configured) == "string" and configured ~= "" then

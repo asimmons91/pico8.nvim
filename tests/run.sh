@@ -66,8 +66,15 @@ PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
     --cmd "set runtimepath+=$root" \
     -l "$root/tests/health.lua"
 
+tree_sitter_data="$(mktemp -d)"
 fallback_rtp="$(mktemp -d)"
-trap 'rm -rf "$fallback_rtp"' EXIT
+trap 'rm -rf "$fallback_rtp" "$tree_sitter_data"' EXIT
+
+PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" XDG_DATA_HOME="$tree_sitter_data" \
+  nvim --headless --clean -u NONE \
+    --cmd "set runtimepath+=$root" \
+    -l "$root/tests/treesitter.lua"
+
 ln -s "$root/lua" "$fallback_rtp/lua"
 
 PICO8_NVIM_FALLBACK_RTP="$fallback_rtp" PICO_LSP_BIN="$binary" \

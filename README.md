@@ -6,7 +6,7 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M32 and M33 are complete. The plugin ships native LSP
+**Status:** M32, M33, and M34 are complete. The plugin ships native LSP
 configuration, cart-aware roots, one-call activation, a buffer-aware
 cart-owned `.lua` helper with managed attachment and `:Pico8Refresh`,
 client-side enabling for the cart budget code lens and inlay hints, a cached
@@ -14,15 +14,15 @@ cart budget statusline with `:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment
 settings, cart variables, and `:Pico8OpenCart` for included `.lua` buffers,
 `gf` navigation for `#include` targets, direct `nvim cart.p8.png` decoding,
 cached P8SCII glyph input with byte forms and a filtered picker, `gq` range
-formatting and Neovim 0.12 `gx` include links, and `:checkhealth pico_lsp`.
-M34 is proposed.
+formatting and Neovim 0.12 `gx` include links, `:checkhealth pico_lsp`, and
+`:Pico8InstallParser` for the vendored Tree-sitter grammar.
 
 ## Requirements
 
 - Neovim 0.11 or newer.
 - A `pico-lsp` binary on `PATH`, or a configured command.
-- Optional: a C compiler for manual Tree-sitter parsing. The parser installer
-  is a proposed milestone.
+- Optional: a C compiler for `:Pico8InstallParser` or manual Tree-sitter
+  parsing. The Vim syntax file works without one.
 
 ## Install
 
@@ -113,6 +113,42 @@ go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@latest
 
 Verify it with `pico-lsp --version`. A Mason package is planned.
 
+### Tree-sitter parser
+
+The Vim syntax file works without a compiler. To build and install the optional
+editor-only Tree-sitter parser from the vendored grammar:
+
+```vim
+:Pico8InstallParser
+```
+
+The command compiles `vendor/tree-sitter-pico8`, installs
+`stdpath("data")/site/parser/pico8.so` (`.dll` on Windows), copies the three
+query files to `stdpath("data")/site/queries/pico8/`, adds `site` to
+`runtimepath` once, and registers the language for the current session. Re-run
+it to repair missing or changed queries; the parser build is skipped when the
+installed parser is up to date. Use `:Pico8InstallParser!` to force a rebuild.
+
+The installer reads `vim.g.pico8_treesitter_source`, then
+`PICO_LSP_TREE_SITTER`, then the plugin's `vendor/tree-sitter-pico8` directory.
+It uses `$CC` when set, otherwise `cc`, then `clang`, with a 60-second timeout.
+
+Tree-sitter highlighting is opt-in. Start it for `.p8` buffers with:
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "pico8",
+  callback = function()
+    pcall(vim.treesitter.start, 0, "pico8")
+  end,
+})
+```
+
+The grammar is editor highlighting only. It never replaces LSP diagnostics,
+completion, or semantic tokens. The committed parser targets ABI 14 for Neovim
+0.11+. See [installation](docs/install.md#tree-sitter) for the manual build and
+fallback.
+
 ## What works now
 
 - `pico-lsp` attaches to `.p8` carts through the shipped `lsp/pico_lsp.lua`
@@ -148,6 +184,8 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - `:checkhealth pico_lsp` reports the Neovim version, configuration, resolved
   binary and version, running clients, client feature state, managed includes,
   helper commands, and Tree-sitter availability without changing anything.
+- `:Pico8InstallParser` builds the vendored Tree-sitter parser and queries under
+  `stdpath("data")/site`; repeated runs are idempotent and `!` rebuilds safely.
 
 ### Health check
 
@@ -394,6 +432,7 @@ vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
 | `:Pico8CartInfo` | Show the cart budget with per-file and per-include detail. |
 | `:Pico8Tabs` | Pick a code tab and place the cursor on its start line. |
 | `:Pico8OpenCart` | Open the cart that owns the current included `.lua` buffer. |
+| `:Pico8InstallParser[!]` | Build and install the vendored Tree-sitter parser and queries; `!` forces a rebuild. |
 | `:checkhealth pico_lsp` | Report configuration, binary, clients, features, includes, helper commands, and Tree-sitter state. |
 
 `:Pico8CartInfo` requests a fresh value asynchronously and notifies the same
@@ -432,8 +471,11 @@ Command resolution checks `vim.g.pico_lsp_cmd`, then `PICO_LSP_BIN`, then
 `vim.lsp.config("pico_lsp", { cmd = ... })` override the shipped value.
 `setup` and the shipped config normalize string commands to a one-element list;
 a value passed directly to `vim.lsp.config` must already be a list or function.
-See [configuration](docs/configuration.md) for root overrides and the server
-settings reference.
+
+`:Pico8InstallParser` reads `vim.g.pico8_treesitter_source`, then
+`PICO_LSP_TREE_SITTER`, then the vendored grammar directory. It uses `$CC` when
+set, otherwise `cc`, then `clang`. See [configuration](docs/configuration.md)
+for root overrides and the server settings reference.
 
 ## Documentation
 
@@ -460,8 +502,10 @@ cached cart info and statusline text, include and PNG cart
 resolution, `gf` include navigation, `gq` range formatting and `gx` document
 links, refresh debouncing and coalescing, included-buffer comment settings and
 variables, `:Pico8OpenCart`, the cart commands, health-check sections and
-read-only behavior, and fallback behavior. The CI workflow checks out the server
-and builds a test binary on Neovim 0.11 and 0.12.
+read-only behavior, Tree-sitter installation, idempotence, query repair, and
+failure paths, and fallback behavior. The CI workflow checks out the server and
+builds a test binary on Neovim 0.11 and 0.12, then runs the installer test with
+the system compiler on macOS.
 
 ## Relationship to pico-lsp
 
@@ -471,7 +515,7 @@ commands, statusline helpers, health checks, and Neovim-specific tests.
 
 The M25–M32 and M34 specs are inherited from `pico-lsp` for traceability. M33
 is implemented in the server and consumed by Neovim's standard `formatexpr`,
-`gx`, and code-lens-refresh handling.
+`gx`, and code-lens-refresh handling. M34 is implemented in this repository.
 
 ## License
 

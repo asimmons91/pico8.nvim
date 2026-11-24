@@ -181,13 +181,50 @@ enabled. A disabled setup installs no PNG autocmd, and the shipped
 `lsp/pico_lsp.lua` config alone does not auto-open PNGs.
 
 ==============================================================================
+TREE-SITTER                                                *pico8-treesitter*
+
+The Vim syntax file works without a compiler. Build and install the optional
+editor-only Tree-sitter parser and queries from the vendored grammar: >vim
+    :Pico8InstallParser
+<
+The command installs under `stdpath("data")/site`: >text
+    parser/pico8.so                 (pico8.dll on Windows)
+    queries/pico8/highlights.scm
+    queries/pico8/indents.scm
+    queries/pico8/textobjects.scm
+<
+It adds `site` to 'runtimepath' once and registers `pico8` in the current
+session. Repeated runs skip an up-to-date parser and repair changed queries.
+|:Pico8InstallParser!| forces a rebuild; a failed rebuild leaves the previous
+parser and queries usable. After a forced rebuild, restart Neovim to load the
+new binary in a session that already loaded the old one.
+
+The grammar directory resolves from `g:pico8_treesitter_source`, then
+`$PICO_LSP_TREE_SITTER`, then `vendor/tree-sitter-pico8` in the plugin. The
+compiler resolves from `$CC`, then `cc`, then `clang`; `$CC` is one executable
+path. Compilation is bounded to 60 seconds and installs atomically.
+
+The installer never starts highlighting. Start it for `pico8` buffers: >lua
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "pico8",
+      callback = function()
+        pcall(vim.treesitter.start, 0, "pico8")
+      end,
+    })
+<
+The grammar is editor highlighting only; LSP diagnostics, completion, and
+semantic tokens stay server-owned. The parser targets ABI 14 for Neovim 0.11+.
+See `docs/install.md#tree-sitter` for the manual build fallback.
+
+==============================================================================
 HEALTH CHECK                                                *pico8-health*
 
 Run `:checkhealth pico_lsp` for a read-only report of the plugin. It covers
 the Neovim version, `vim.lsp.config` presence, the resolved command and its
 source, the server binary and `--version` probe, running clients and their
 roots, client-side code-lens and inlay-hint state, helper-managed `.lua`
-buffers, helper commands, and Tree-sitter availability.
+buffers, helper commands, and Tree-sitter availability. Install the parser with
+|:Pico8InstallParser|; health only reports it.
 
 Health does not start or stop clients, download a binary, install a parser,
 edit a buffer, or change configuration. The only process it runs is the
@@ -209,6 +246,8 @@ COMMANDS                                                   *pico8-commands*
 :Pico8CartInfo           Request and show the cart budget with file detail.
 :Pico8Tabs               Pick a code tab and jump to its start line.
 :Pico8OpenCart           Open the cart that owns the current include buffer.
+:Pico8InstallParser[!]   Build and install the Tree-sitter parser and queries;
+                         `!` forces a rebuild. See |pico8-treesitter|.
 
 `:checkhealth pico_lsp` reports plugin state without changing it; see
 |pico8-health|.
@@ -219,13 +258,12 @@ buffer, and jumps inside the virtual buffer for a decoded `.p8.png` cart.
 buffer is already a cart on a cart or decoded `.p8.png` buffer, and reports no
 owner on an unrelated buffer.
 
-Proposed commands: `:Pico8InstallParser`.
-
 ==============================================================================
 VARIABLES                                                 *pico8-variables*
 
 `g:pico8_glyph_maps`     Enable Shift-A..Shift-Z glyph maps. The
                          `glyph_maps` setup option is equivalent.
+`g:pico8_treesitter_source` Override the Tree-sitter grammar directory.
 `g:pico_lsp_cmd`         Override the server command.
 `g:pico_lsp_helper_disabled` Disable the included `.lua` helper.
 `b:pico8_cart`           Owning cart URI on a managed include.

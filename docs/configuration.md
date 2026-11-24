@@ -244,6 +244,22 @@ vim.lsp.enable("pico_lsp")
 
 The helper reads the merged `vim.lsp.config["pico_lsp"]` value.
 
+## Tree-sitter installer
+
+`:Pico8InstallParser` is independent of the LSP setup and is registered by both
+`require("pico_lsp").setup()` and the shipped `lsp/pico_lsp.lua`. It resolves
+the grammar directory in this order:
+
+1. `vim.g.pico8_treesitter_source` when it is set to a non-empty path;
+2. `PICO_LSP_TREE_SITTER` when it is set to a non-empty path;
+3. `vendor/tree-sitter-pico8` in the plugin.
+
+An explicit override is authoritative even when it is invalid, so a typo does
+not silently fall back to the vendored grammar. The installer uses `$CC` when
+set, otherwise `cc`, then `clang`; `$CC` is one executable path. It installs to
+`stdpath("data")/site` and does not write inside the plugin or your config
+directory. See [installation](install.md#tree-sitter) for the full behavior.
+
 ## Health check
 
 Run `:checkhealth pico_lsp` for a read-only report of the configuration,
@@ -252,9 +268,3 @@ helper commands, and Tree-sitter availability. It never starts clients,
 installs parsers, edits buffers, or changes configuration. See
 [troubleshooting](troubleshooting.md#using-checkhealth-pico_lsp) for how to
 read the report.
-
-## Future options
-
-The following are proposed and not available yet:
-
-- `:Pico8InstallParser` (M34).

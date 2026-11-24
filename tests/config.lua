@@ -90,6 +90,9 @@ local shipped = load_shipped()
 if #shipped.cmd ~= 1 or shipped.cmd[1] ~= "/opt/pico-lsp" then
   fail("vim.g.pico_lsp_cmd string did not resolve to a one-element cmd list")
 end
+if vim.fn.exists(":Pico8InstallParser") ~= 2 then
+  fail("the shipped config did not register :Pico8InstallParser")
+end
 
 vim.g.pico_lsp_cmd = { "/opt/pico-lsp", "--stdio" }
 shipped = load_shipped()

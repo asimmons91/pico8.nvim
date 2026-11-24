@@ -12,6 +12,7 @@ local M = {}
 local cart_module = require("pico_lsp.cart")
 local glyphs = require("pico_lsp.glyphs")
 local includes = require("pico_lsp.includes")
+local treesitter = require("pico_lsp.treesitter")
 
 M.png_buffers = {}
 
@@ -1413,6 +1414,9 @@ local function define_commands(enabled)
   vim.api.nvim_create_user_command("Pico8ToggleInlayHints", function()
     require("pico_lsp.client").toggle_inlay_hints(0)
   end, { nargs = 0, desc = "Toggle pico-lsp inlay hints for the current buffer" })
+  -- The parser installer does not touch the LSP or the include helper, so it
+  -- stays available when the helper is disabled.
+  treesitter.install_command()
   if not enabled then
     return
   end

@@ -17,11 +17,21 @@ diagnostics, completion, or semantic tokens. Regeneration and corpus tests
 remain in `pico-lsp`; this repository tests compilation, loading, and query
 installation.
 
-Manual build:
+With the plugin on `runtimepath`, build and install the parser and queries:
+
+```vim
+:Pico8InstallParser
+```
+
+The command uses the committed sources, installs
+`stdpath("data")/site/parser/pico8.so` (`.dll` on Windows) and the three query
+files under `stdpath("data")/site/queries/pico8/`, and registers the language
+for the current session. `:Pico8InstallParser!` forces a rebuild.
+
+Manual build fallback:
 
 ```sh
 cc -shared -fPIC -I src src/parser.c src/scanner.c -o pico8.so
 ```
 
-The proposed `:Pico8InstallParser` command in M34 builds and installs the parser
-automatically.
+See `docs/install.md#tree-sitter` for the manual parser and query install paths.
