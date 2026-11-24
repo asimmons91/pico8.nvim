@@ -295,7 +295,10 @@ When `require("pico_lsp").setup()` enables the helper:
   line. Vim also tries its unmodified-name lookup before `includeexpr`, so a
   quoted path whose first word is an existing file in the cart can open that
   file. The cart-scoped `path` prevents the same shadowing from the working
-  directory; the first-word case is documented in troubleshooting.
+  directory; the first-word case is documented in troubleshooting. Names
+  starting with `./` or `../` are handled by Vim relative to the working
+  directory before `includeexpr`; use an absolute or cart-relative path if a
+  same-named file there would win.
 
 ## Risks
 

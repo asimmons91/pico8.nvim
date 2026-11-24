@@ -130,7 +130,9 @@ above.
 - Vim tries the name it detects before `includeexpr`. For a quoted path such as
   `"space dir/lib.lua"`, if the first word (`space`) is itself a file in the
   cart, `gf` can open that file instead. Rename the file or use `:edit` with
-  the full path in that rare case.
+  the full path in that rare case. Names starting with `./` or `../` are also
+  handled by Vim relative to the working directory; use an absolute or
+  cart-relative path if a same-named file there would win.
 - Quoted, unquoted, whitespace-padded, nested, and space-containing paths work.
   A `:<hex digit>` suffix is stripped for `.p8`/`.p8.png` targets; a `.lua:2`
   filename is literal.

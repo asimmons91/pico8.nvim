@@ -564,7 +564,7 @@ local function set_virtual_text(buf, text)
   vim.bo[buf].modified = false
 end
 
-local function open_virtual(result)
+local function open_virtual(result, root_dir)
   local buf = vim.api.nvim_create_buf(true, true)
   local named, name_err = pcall(vim.api.nvim_buf_set_name, buf, result.virtualUri)
   if not named then
@@ -573,6 +573,7 @@ local function open_virtual(result)
   end
   set_virtual_text(buf, result.text)
   vim.b[buf].pico8_virtual_cart = true
+  vim.b[buf].pico8_cart_root = root_dir
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].filetype = "pico8"
   vim.bo[buf].bufhidden = "hide"
@@ -675,7 +676,7 @@ function M.open_png(path)
     vim.api.nvim_set_current_buf(buf)
   else
     local create_err
-    buf, create_err = open_virtual(result)
+    buf, create_err = open_virtual(result, root_dir)
     if not buf then
       notify("could not open the decoded cart buffer: " .. tostring(create_err), vim.log.levels.ERROR)
       return nil, create_err

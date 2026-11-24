@@ -27,10 +27,13 @@ endif
 
 " Scope gf's unmodified-name lookup to the cart. Vim tries 'path' before
 " 'includeexpr'; leaving the default ".,," lets a same-named file in the working
-" directory win over a missing cart include. A virtual PNG buffer gets its
-" source directory from the helper instead.
-if !get(b:, "pico8_virtual_cart", 0) && (&path == "" || &path == ".,,")
-  let s:pico8_cart_dir = expand("%:p:h")
+" directory win over a missing cart include. A decoded PNG virtual buffer gets
+" its source directory from b:pico8_cart_root.
+if &path == "" || &path == ".,,"
+  let s:pico8_cart_dir = get(b:, "pico8_cart_root", "")
+  if s:pico8_cart_dir == ""
+    let s:pico8_cart_dir = expand("%:p:h")
+  endif
   if s:pico8_cart_dir != ""
     let &l:path = escape(s:pico8_cart_dir, ' ,\')
     let b:undo_ftplugin .= "|setlocal path<"
