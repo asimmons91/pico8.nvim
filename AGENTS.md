@@ -88,7 +88,8 @@
   recipe, standalone `.lua` guidance, known limitations, support/security/
   contribution files, release checklist, and `tests/docs.lua`. `pico-lsp`
   v1.8.1 predates M33, so `gq`/`gx` are documented as requiring a newer server
-  build. Mason and the LazyVim extra remain M35.
+  build. A manual PICO-8 runtime load of the demo cart remains the only unrun
+  M36 check. Mason and the LazyVim extra remain M35.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
