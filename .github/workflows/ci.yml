@@ -7,6 +7,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: v0.12.6
+
+      - name: Check documentation links and help tags
+        env:
+          PICO8_NVIM_ROOT: ${{ github.workspace }}
+        run: |
+          nvim --headless --clean -u NONE -l tests/docs.lua
+
   neovim:
     name: Neovim ${{ matrix.neovim }}
     runs-on: ubuntu-latest

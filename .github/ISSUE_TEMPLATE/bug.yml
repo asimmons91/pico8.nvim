@@ -1,0 +1,114 @@
+name: Bug report
+description: Report a reproducible pico8.nvim bug
+title: "[bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in every required field and
+        attach a minimal cart or include when possible.
+
+        For security problems, use SECURITY.md instead of this public form.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and the troubleshooting guide.
+          required: true
+        - label: I can reproduce this with the latest pico8.nvim release.
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and the expected behavior.
+      placeholder: The client attached but diagnostics did not appear...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact commands and the smallest cart or include that shows the problem.
+      placeholder: |
+        1. Start nvim with this config: ...
+        2. Open this cart: ...
+        3. Run this command: ...
+    validations:
+      required: true
+  - type: textarea
+    id: cart
+    attributes:
+      label: Minimal cart or include
+      description: Paste the smallest `.p8`, `.lua`, or configuration that reproduces the bug.
+      render: lua
+    validations:
+      required: false
+  - type: input
+    id: plugin-version
+    attributes:
+      label: pico8.nvim version or tag
+      description: The release tag, commit, or plugin-manager version.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: neovim-version
+    attributes:
+      label: Neovim version
+      description: Output of `nvim --version`.
+      placeholder: NVIM v0.12.6
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: macOS arm64 / Ubuntu amd64 / Windows amd64
+    validations:
+      required: true
+  - type: textarea
+    id: health
+    attributes:
+      label: ":checkhealth pico_lsp output"
+      description: Paste the report. It includes the resolved server binary and client state.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: pico-lsp version and resolved path
+      description: Use `:checkhealth pico_lsp`; the shell `pico-lsp --version` may resolve a different binary.
+      placeholder: v1.8.1 at /home/me/.local/bin/pico-lsp
+    validations:
+      required: true
+  - type: dropdown
+    id: luals
+    attributes:
+      label: Is lua_ls also attached?
+      description: Run `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
+      options:
+        - "No"
+        - "Yes"
+        - "Unknown"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only the relevant client or server log lines. Remove source you do not want to share.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, recordings, or related issues.
+    validations:
+      required: false

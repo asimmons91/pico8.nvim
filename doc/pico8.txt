@@ -3,6 +3,42 @@
 Neovim client for pico-lsp, a PICO-8 language server.
 
 ==============================================================================
+INSTALL                                                   *pico8-install*
+
+Requirements ~
+                                                      *pico8-requirements*
+- Neovim 0.11.4 or newer. This release is tested with 0.11.4 and 0.12.6.
+- `pico-lsp` v1.8.1 or newer. A release archive does not require Go.
+- Optional: a C compiler for |:Pico8InstallParser| (Tree-sitter).
+- PICO-8 0.2.7 is only needed to run carts. The plugin does not run them.
+
+Install the server from the `pico-lsp` release page or with Go 1.27.4+:
+>sh
+    go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@v1.8.1
+<
+A lazy.nvim plugin spec: >lua
+    {
+      "asimmons91/pico8.nvim",
+      tag = "v0.1.0",
+      main = "pico_lsp",
+      lazy = false,
+      opts = {},
+    }
+<
+Neovim 0.12+ also supports: >lua
+    vim.pack.add({
+      { src = "https://github.com/asimmons91/pico8.nvim", version = "v0.1.0" },
+    })
+    require("pico_lsp").setup()
+<
+There is no `plugin/` entry. Keep the plugin on 'runtimepath' and call
+`require("pico_lsp").setup()` once; that registers commands, starts the
+included-Lua helper, and installs PNG auto-open. Keep 'filetype plugin' on.
+
+Full install, upgrade, uninstall, and Tree-sitter instructions are in
+`docs/install.md`. The five-minute path is in `docs/getting-started.md`.
+
+==============================================================================
 SETUP                                                         *pico8-setup*
 
 Call: >lua
@@ -34,7 +70,7 @@ the PICO-8 target is restored. Restore records are module-local, so after a
 plugin reload a later detach leaves exact PICO-8 values in place.
 `b:pico8_cart` holds the owning cart URI and `b:pico8_cart_root` its directory.
 
-Options:
+Options:                                                      *pico8-options*
     `cmd`           server command (string, list, or function)
     `lsp`           enable the client during setup (default true)
     `disable`       disable the helper and LSP setup
@@ -118,10 +154,11 @@ ftplugin undo hook.
 ==============================================================================
 FORMATTING AND LINKS                                      *pico8-formatting*
 
-The server advertises standard range formatting, so Neovim sets 'formatexpr'
-for `pico8` buffers. |gq| formats the complete lines covered by the selection
-through `textDocument/rangeFormatting`; a single-line selection formats that
-line. The server formats the whole document for context but returns edits only
+A server build with M33 advertises standard range formatting, so Neovim sets
+'formatexpr' for `pico8` buffers. |gq| formats the complete lines covered by the
+selection through `textDocument/rangeFormatting`; a single-line selection
+formats that line. `pico-lsp` v1.8.1 predates M33, so with that release |gq| is
+not configured and |gx| below is unavailable. The server formats the whole document for context but returns edits only
 for the selected lines, and non-code cart sections are preserved. The PICO-8
 formatter does not wrap long lines, so |gq| changes layout and spacing rather
 than reflowing comment text.
@@ -236,21 +273,29 @@ read the report.
 COMMANDS                                                   *pico8-commands*
 
 :Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer;
-                         offers file completion.
+                         offers file completion.                *:Pico8OpenPng*
 :Pico8ReloadPng          Reload the current decoded PNG cart.
+                                                             *:Pico8ReloadPng*
 :Pico8InsertGlyph [name|byte|search]
                          Insert a P8SCII glyph by name or byte, or open a
                          filtered picker. Completes cached names.
+                                                          *:Pico8InsertGlyph*
 :Pico8Refresh            Clear the include cache and rescan loaded buffers.
+                                                              *:Pico8Refresh*
 :Pico8ToggleInlayHints   Toggle client-side inlay hints for this buffer.
+                                                       *:Pico8ToggleInlayHints*
 :Pico8CartInfo           Request and show the cart budget with file detail.
+                                                            *:Pico8CartInfo*
 :Pico8Tabs               Pick a code tab and jump to its start line.
+                                                                *:Pico8Tabs*
 :Pico8OpenCart           Open the cart that owns the current include buffer.
+                                                            *:Pico8OpenCart*
 :Pico8InstallParser[!]   Build and install the Tree-sitter parser and queries;
                          `!` forces a rebuild. See |pico8-treesitter|.
+                                                       *:Pico8InstallParser*
 
 `:checkhealth pico_lsp` reports plugin state without changing it; see
-|pico8-health|.
+|pico8-health|.                                      *:checkhealth-pico_lsp*
 
 `:Pico8Tabs` explains that tabs belong to the owning cart on an included `.lua`
 buffer, and jumps inside the virtual buffer for a decoded `.p8.png` cart.

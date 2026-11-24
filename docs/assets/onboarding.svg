@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="712" height="520" viewBox="0 0 712 520" role="img" aria-labelledby="title desc">
+<title id="title">Neovim editing examples/hello.p8 with pico8.nvim</title>
+<desc id="desc">A terminal capture showing the cart, its #include, the cart budget code lens and statusline, and the resolved PICO-8 client.</desc>
+<rect width="712" height="520" rx="12" fill="#111111"/>
+<rect x="0" y="0" width="712" height="34" rx="12" fill="#181818"/>
+<rect x="0" y="24" width="712" height="10" fill="#181818"/>
+<circle cx="26" cy="17.0" r="5" fill="#ff5f56"/>
+<circle cx="44" cy="17.0" r="5" fill="#ffbd2e"/>
+<circle cx="62" cy="17.0" r="5" fill="#27c93f"/>
+<text x="86" y="21.0" fill="#9a9a9a" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="12">nvim - examples/hello.p8</text>
+<text x="692.0" y="21.0" text-anchor="end" fill="#6f6f6f" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="12">pico8.nvim</text>
+<rect x="20" y="44" width="672.0" height="456.0" rx="6" fill="#1c1c1c"/>
+<rect x="20" y="44.0" width="672.0" height="19" fill="#161616"/>
+<rect x="20" y="462.0" width="672.0" height="19" fill="#303030"/>
+<text x="20.0" y="58.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">    86 / 8192 tokens · 641 / 65535 chars · 382 / 15616 compressed</tspan>
+<tspan fill="#c7c7c7">             </tspan>
+</text>
+<text x="20.0" y="77.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  1 </tspan>
+<tspan fill="#c7c7c7">pico</tspan>
+<tspan fill="#5f8787">-</tspan>
+<tspan fill="#d3d3d3">8</tspan>
+<tspan fill="#c7c7c7"> cartridge </tspan>
+<tspan fill="#5f8787">//</tspan>
+<tspan fill="#c7c7c7"> pico8</tspan>
+<tspan fill="#ff0000">.</tspan>
+<tspan fill="#c7c7c7">com                                             </tspan>
+</text>
+<text x="20.0" y="96.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  2 </tspan>
+<tspan fill="#c7c7c7">version </tspan>
+<tspan fill="#d3d3d3">42</tspan>
+<tspan fill="#c7c7c7">                                                                </tspan>
+</text>
+<text x="20.0" y="115.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  3 </tspan>
+<tspan fill="#d75f87">__lua__</tspan>
+<tspan fill="#c7c7c7">                                                                   </tspan>
+</text>
+<text x="20.0" y="134.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  4 -- pico8.nvim demo cart</tspan>
+<tspan fill="#c7c7c7">                                                   </tspan>
+</text>
+<text x="20.0" y="153.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  5 -- The include below belongs to this cart.</tspan>
+<tspan fill="#c7c7c7">                                </tspan>
+</text>
+<text x="20.0" y="172.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  6 -- pico_lsp also attaches to examples/hello_lib.lua.</tspan>
+<tspan fill="#c7c7c7">                      </tspan>
+</text>
+<text x="20.0" y="191.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  7 </tspan>
+<tspan fill="#c7c7c7">                                                                          </tspan>
+</text>
+<text x="20.0" y="210.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  8 </tspan>
+<tspan fill="#5f8787">#</tspan>
+<tspan fill="#c7c7c7">include </tspan>
+<tspan fill="#add8e6">hello_lib.lua</tspan>
+<tspan fill="#c7c7c7">                                                    </tspan>
+</text>
+<text x="20.0" y="229.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6">  9 </tspan>
+<tspan fill="#c7c7c7">                                                                          </tspan>
+</text>
+<text x="20.0" y="248.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 10 </tspan>
+<tspan fill="#5f8787">function</tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">_init</tspan>
+<tspan fill="#5f8787">()</tspan>
+<tspan fill="#c7c7c7">                                                          </tspan>
+</text>
+<text x="20.0" y="267.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 11 </tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">x</tspan>
+<tspan fill="#5f8787">=</tspan>
+<tspan fill="#d3d3d3">64</tspan>
+<tspan fill="#c7c7c7">                                                                     </tspan>
+</text>
+<text x="20.0" y="286.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 12 </tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">y</tspan>
+<tspan fill="#5f8787">=</tspan>
+<tspan fill="#d3d3d3">64</tspan>
+<tspan fill="#c7c7c7">                                                                     </tspan>
+</text>
+<text x="20.0" y="305.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 13 </tspan>
+<tspan fill="#5f8787">end</tspan>
+<tspan fill="#c7c7c7">                                                                       </tspan>
+</text>
+<text x="20.0" y="324.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 14 </tspan>
+<tspan fill="#c7c7c7">                                                                          </tspan>
+</text>
+<text x="20.0" y="343.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 15 </tspan>
+<tspan fill="#5f8787">function</tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">_update</tspan>
+<tspan fill="#5f8787">()</tspan>
+<tspan fill="#c7c7c7">                                                        </tspan>
+</text>
+<text x="20.0" y="362.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 16 </tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">x</tspan>
+<tspan fill="#5f8787">,</tspan>
+<tspan fill="#90ee90">y</tspan>
+<tspan fill="#5f8787">=</tspan>
+<tspan fill="#90ee90">move_circle</tspan>
+<tspan fill="#5f8787">(</tspan>
+<tspan fill="#90ee90">x</tspan>
+<tspan fill="#5f8787">,</tspan>
+<tspan fill="#90ee90">y</tspan>
+<tspan fill="#5f8787">)</tspan>
+<tspan fill="#c7c7c7">                                                     </tspan>
+</text>
+<text x="20.0" y="381.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 17 </tspan>
+<tspan fill="#5f8787">end</tspan>
+<tspan fill="#c7c7c7">                                                                       </tspan>
+</text>
+<text x="20.0" y="400.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 18 </tspan>
+<tspan fill="#c7c7c7">                                                                          </tspan>
+</text>
+<text x="20.0" y="419.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 19 </tspan>
+<tspan fill="#5f8787">function</tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">_draw</tspan>
+<tspan fill="#5f8787">()</tspan>
+<tspan fill="#c7c7c7">                                                          </tspan>
+</text>
+<text x="20.0" y="438.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 20 </tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">cls</tspan>
+<tspan fill="#5f8787">(</tspan>
+<tspan fill="#d3d3d3">1</tspan>
+<tspan fill="#5f8787">)</tspan>
+<tspan fill="#c7c7c7">                                                                   </tspan>
+</text>
+<text x="20.0" y="457.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">  </tspan>
+<tspan fill="#add8e6"> 21 </tspan>
+<tspan fill="#c7c7c7"> </tspan>
+<tspan fill="#90ee90">circfill</tspan>
+<tspan fill="#5f8787">(</tspan>
+<tspan fill="#90ee90">x</tspan>
+<tspan fill="#5f8787">,</tspan>
+<tspan fill="#90ee90">y</tspan>
+<tspan fill="#5f8787">,</tspan>
+<tspan fill="#d3d3d3">4</tspan>
+<tspan fill="#5f8787">,</tspan>
+<tspan fill="#d3d3d3">10</tspan>
+<tspan fill="#5f8787">)</tspan>
+<tspan fill="#c7c7c7">                                                       </tspan>
+</text>
+<text x="20.0" y="476.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#d3d3d3" text-decoration="underline">hello.p8  86/8192 tok · 641/65535 ch · 382/15616 zip                         8:3</tspan>
+</text>
+<text x="20.0" y="495.0" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="14" xml:space="preserve">
+<tspan fill="#585858">                                                                                </tspan>
+</text>
+<rect x="36.8" y="197.0" width="8.4" height="17" fill="#c7c7c7" fill-opacity="0.35"/>
+</svg>

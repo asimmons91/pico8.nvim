@@ -1,30 +1,69 @@
 # pico8.nvim
 
+[![CI](https://github.com/asimmons91/pico8.nvim/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/asimmons91/pico8.nvim/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/asimmons91/pico8.nvim)](https://github.com/asimmons91/pico8.nvim/releases)
+
 Neovim client for [`pico-lsp`](https://github.com/asimmons91/pico-lsp), a
 PICO-8 language server built in Go. The plugin provides PICO-8 filetype
 detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
-helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
-Neovim-specific milestones inherited from the server repository.
+helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and the
+Neovim-specific client surface.
 
-**Status:** M32, M33, and M34 are complete. The plugin ships native LSP
-configuration, cart-aware roots, one-call activation, a buffer-aware
-cart-owned `.lua` helper with managed attachment and `:Pico8Refresh`,
-client-side enabling for the cart budget code lens and inlay hints, a cached
-cart budget statusline with `:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment
-settings, cart variables, and `:Pico8OpenCart` for included `.lua` buffers,
-`gf` navigation for `#include` targets, direct `nvim cart.p8.png` decoding,
-cached P8SCII glyph input with byte forms and a filtered picker, `gq` range
-formatting and Neovim 0.12 `gx` include links, `:checkhealth pico_lsp`, and
-`:Pico8InstallParser` for the vendored Tree-sitter grammar.
+New here? Start with the [five-minute quickstart](docs/getting-started.md) or
+open the [demo cart](examples/hello.p8).
+
+![A Neovim terminal session editing examples/hello.p8 with the cart budget code lens, statusline, and #include line](docs/assets/onboarding.svg)
+
+**Status:** v0.1.0. The plugin ships native LSP configuration, cart-aware
+roots, one-call activation, a buffer-aware cart-owned `.lua` helper with
+managed attachment and `:Pico8Refresh`, client-side enabling for the cart
+budget code lens and inlay hints, a cached cart budget statusline with
+`:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment settings, cart variables, and
+`:Pico8OpenCart` for included `.lua` buffers, `gf` navigation for `#include`
+targets, direct `nvim cart.p8.png` decoding, cached P8SCII glyph input with byte
+forms and a filtered picker, `gq` range formatting and Neovim 0.12 `gx` include
+links, `:checkhealth pico_lsp`, and `:Pico8InstallParser` for the vendored
+Tree-sitter grammar.
+
+| `pico8.nvim` | `pico-lsp` | Tested Neovim |
+|---|---|---|
+| v0.1.0 | v1.8.1 (minimum) | 0.11.4, 0.12.6 |
+
+`pico-lsp` v1.8.1 predates the standard range-formatting and document-link
+capabilities added in M33. Core editing, cart budget, includes, glyphs, PNG,
+health, and Tree-sitter work with v1.8.1; `gq` and Neovim 0.12 `gx` require a
+newer server build. The client falls back to `gf` when those capabilities are
+absent.
 
 ## Requirements
 
-- Neovim 0.11 or newer.
-- A `pico-lsp` binary on `PATH`, or a configured command.
+- Neovim 0.11.4 or newer. CI covers 0.11.4 and 0.12.6; newer patch releases
+  are not individually claimed as tested.
+- A `pico-lsp` v1.8.1 or newer binary on `PATH`, or a configured command.
 - Optional: a C compiler for `:Pico8InstallParser` or manual Tree-sitter
   parsing. The Vim syntax file works without one.
+- PICO-8 0.2.7 if you want to run carts. PICO-8 is not required to edit them,
+  and this plugin does not run carts.
 
 ## Install
+
+### Install the server
+
+Download the archive for your OS and architecture from the
+[`pico-lsp` v1.8.1 release](https://github.com/asimmons91/pico-lsp/releases/tag/v1.8.1),
+or install with Go 1.27.4 or newer:
+
+```sh
+go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@v1.8.1
+```
+
+Verify it with `pico-lsp --version`. See the
+[`pico-lsp` installation guide](https://github.com/asimmons91/pico-lsp/blob/main/docs/install.md)
+for per-OS archives, checksums, Windows `.zip`, macOS Gatekeeper, offline use,
+upgrade, uninstall, and `GOBIN`/`PATH` guidance.
+
+Mason packaging is not available yet; it remains distribution work in
+[the roadmap](docs/ROADMAP.md).
 
 ### lazy.nvim / LazyVim
 
@@ -34,6 +73,7 @@ Put this in `lua/plugins/pico8.lua`:
 return {
   {
     "asimmons91/pico8.nvim",
+    tag = "v0.1.0",
     main = "pico_lsp",
     lazy = false,
     opts = {},
@@ -47,17 +87,17 @@ buffer is opened. `opts = {}` runs `require("pico_lsp").setup({})` and enables
 the `pico_lsp` client by default. Set `opts = { lsp = false }` if you want to
 manage `vim.lsp.enable` yourself.
 
-For local development before the plugin is tagged:
+### vim.pack (Neovim 0.12+)
 
 ```lua
-{
-  dir = vim.fn.expand("~/projects/pico8.nvim"),
-  name = "pico8.nvim",
-  main = "pico_lsp",
-  lazy = false,
-  opts = {},
-}
+vim.pack.add({
+  { src = "https://github.com/asimmons91/pico8.nvim", version = "v0.1.0" },
+})
+require("pico_lsp").setup()
 ```
+
+`vim.pack.add` installs and loads the plugin; the explicit `setup()` is still
+required for commands, the include helper, and PNG auto-open.
 
 ### Vanilla Neovim
 
@@ -71,7 +111,23 @@ buffers whose filetype is `pico8`. Neovim 0.11+ loads it from `runtimepath`.
 The plugin also ships `ftdetect` (which assigns that filetype to `.p8` files),
 `ftplugin`, `syntax`, the cart-owned `.lua` helper, and commands. Keep the
 plugin on `runtimepath` or lazy-load it before the first cart opens so those
-runtime files are available.
+runtime files are available, and keep `filetype plugin on` enabled for the
+`ftplugin` options.
+
+There is no `plugin/` entry: installing the plugin alone does not register the
+commands, start the helper, or install PNG auto-open. Call `setup()` once.
+
+For local development before a tagged release:
+
+```lua
+{
+  dir = vim.fn.expand("~/projects/pico8.nvim"),
+  name = "pico8.nvim",
+  main = "pico_lsp",
+  lazy = false,
+  opts = {},
+}
+```
 
 ### Workspace root
 
@@ -102,17 +158,6 @@ directory otherwise. There is no default `.git` fallback in the shipped
 config. A user override replaces the shipped callback; the two roots are not
 merged.
 
-### Server binary
-
-Install `pico-lsp` from a [GitHub release](https://github.com/asimmons91/pico-lsp/releases)
-or with:
-
-```sh
-go install github.com/asimmons91/pico-lsp/cmd/pico-lsp@latest
-```
-
-Verify it with `pico-lsp --version`. A Mason package is planned.
-
 ### Tree-sitter parser
 
 The Vim syntax file works without a compiler. To build and install the optional
@@ -132,6 +177,11 @@ installed parser is up to date. Use `:Pico8InstallParser!` to force a rebuild.
 The installer reads `vim.g.pico8_treesitter_source`, then
 `PICO_LSP_TREE_SITTER`, then the plugin's `vendor/tree-sitter-pico8` directory.
 It uses `$CC` when set, otherwise `cc`, then `clang`, with a 60-second timeout.
+MSVC's `cl` is not supported; Windows builds are best-effort and not covered by
+CI.
+
+`nvim-treesitter` does not install this grammar, and `:TSInstall pico8` is not
+supported. Use `:Pico8InstallParser` instead.
 
 Tree-sitter highlighting is opt-in. Start it for `.p8` buffers with:
 
@@ -172,7 +222,9 @@ fallback.
   selector is stripped for `gf`).
 - `gq` formats the selected lines through the server's range formatting.
   Neovim 0.12 `gx` opens the resolved `#include` target through the document
-  link and `vim.ui.open`; `gf` remains the in-editor path.
+  link and `vim.ui.open`; `gf` remains the in-editor path. These require a
+  server build with M33; `pico-lsp` v1.8.1 predates it and leaves `gf` as the
+  fallback.
 - Read-only `.p8.png` carts open directly with `nvim cart.p8.png`, and through
   `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - `:Pico8InsertGlyph` inserts a glyph by name, decimal byte, or `0x` byte; a
@@ -477,14 +529,53 @@ a value passed directly to `vim.lsp.config` must already be a list or function.
 set, otherwise `cc`, then `clang`. See [configuration](docs/configuration.md)
 for root overrides and the server settings reference.
 
+## Known limitations
+
+- `.p8.png` carts are read-only. Edit and save an exported text `.p8` when you
+  need to change the cart; the plugin never writes PNG carts.
+- The plugin does not run, compile, or emulate carts. It edits the same `.p8`
+  and `.lua` files that PICO-8 loads.
+- Only the PICO-8 0.2.7 API is modeled. The Lua standard library is not
+  available.
+- PICO-8's `CTRL-J` (Hiragana), `CTRL-K` (Katakana), and `CTRL-P` (puny font)
+  input modes are not implemented because they conflict with Neovim's built-in
+  insert-mode keys.
+- Neovim 0.11 has no document-link `gx` handling; use `gf` or upgrade to
+  Neovim 0.12.
+- Mason and the LazyVim extra are not available yet. The manual install path in
+  this README and [installation](docs/install.md) is the supported path.
+- Windows Tree-sitter builds are best-effort with `cc` or `clang`; MSVC's `cl`
+  is not supported and Windows is not covered by CI.
+- Standalone `.lua` carts use a manual filetype switch; see
+  [usage](docs/usage.md#standalone-lua-carts).
+- P8SCII glyphs are Unicode characters. The terminal font must render them; see
+  [glyph input](docs/usage.md#p8scii-glyph-input).
+
+## Support and privacy
+
+- Start with [Getting started](docs/getting-started.md) and
+  [Troubleshooting](docs/troubleshooting.md).
+- Report bugs with the [bug report form](https://github.com/asimmons91/pico8.nvim/issues/new?template=bug.yml).
+  Include a minimal cart, `:checkhealth pico_lsp` output, and your Neovim and
+  `pico-lsp` versions.
+- Report vulnerabilities privately through [SECURITY.md](SECURITY.md), not the
+  public issue tracker.
+- Contribution guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The plugin has no telemetry or analytics. Carts are parsed by `pico-lsp`, never
+executed. Logs may contain source excerpts when verbose logging is enabled;
+review a log before sharing it.
+
 ## Documentation
 
+- [Getting started](docs/getting-started.md)
 - [Installation](docs/install.md)
 - [Usage](docs/usage.md)
 - [Configuration](docs/configuration.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Client milestones](docs/milestones/README.md)
+- [Changelog](CHANGELOG.md)
 - `:help pico8` for the in-editor command summary
 
 ## Development
@@ -503,9 +594,19 @@ resolution, `gf` include navigation, `gq` range formatting and `gx` document
 links, refresh debouncing and coalescing, included-buffer comment settings and
 variables, `:Pico8OpenCart`, the cart commands, health-check sections and
 read-only behavior, Tree-sitter installation, idempotence, query repair, and
-failure paths, and fallback behavior. The CI workflow checks out the server and
-builds a test binary on Neovim 0.11 and 0.12, then runs the installer test with
-the system compiler on macOS.
+failure paths, and fallback behavior. CI runs the suite on Neovim 0.11.4 and
+0.12.6 against a built `pico-lsp` binary, then runs the installer test with the
+system compiler on macOS. The release checklist adds a run against the pinned
+`pico-lsp` release.
+
+Documentation checks run with:
+
+```sh
+nvim --headless --clean -u NONE -l tests/docs.lua
+```
+
+The release process and manual verification matrix are in
+[docs/release-checklist.md](docs/release-checklist.md).
 
 ## Relationship to pico-lsp
 
@@ -515,9 +616,10 @@ commands, statusline helpers, health checks, and Neovim-specific tests.
 
 The M25–M32 and M34 specs are inherited from `pico-lsp` for traceability. M33
 is implemented in the server and consumed by Neovim's standard `formatexpr`,
-`gx`, and code-lens-refresh handling. M34 is implemented in this repository.
+`gx`, and code-lens-refresh handling. M34 and M36 are implemented in this
+repository. M35 remains the proposed Mason and LazyVim distribution milestone.
 
 ## License
 
-MIT. The Tree-sitter parser sources are derived from tree-sitter-lua; see
-`vendor/tree-sitter-pico8/LICENSE.tree-sitter-lua`.
+[MIT](LICENSE). The Tree-sitter parser sources are derived from tree-sitter-lua;
+see `vendor/tree-sitter-pico8/LICENSE.tree-sitter-lua`.

@@ -1,13 +1,14 @@
 # pico8.nvim — Roadmap
 
-**Status:** M32, M33, and M34 are complete. The existing Neovim client surface
-is present; M35 remains proposed.
+**Status:** M25–M34 and M36 are complete. The existing Neovim client surface
+and the v0.1.0 onboarding path are present. M35 (Mason and LazyVim
+distribution) remains proposed and does not block the manual launch path.
 
 **Last updated:** 2026-11-24
 
 **Server:** [`pico-lsp`](https://github.com/asimmons91/pico-lsp)
 
-**Target:** Neovim 0.11+; PICO-8 0.2.7 through `pico-lsp`
+**Target:** Neovim 0.11.4+; PICO-8 0.2.7 through `pico-lsp`
 
 ## Vision
 
@@ -79,6 +80,10 @@ client source.
   previous parser on failure. `!` forces a rebuild. Base-config and setup users
   both get the command, and macOS CI covers the build.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
+- M36 (end-user onboarding, documentation, and release readiness) is complete:
+  it covers the tagged v0.1.0 release path, quickstart and demo cart, support
+  files, install paths, help, and documentation checks, and explicitly excludes
+  Mason and LazyVim publication (M35).
 
 ## Milestones
 
@@ -96,6 +101,7 @@ client source.
 | M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | Done |
 | M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Done |
 | M35 | Mason and LazyVim extra | Mason package, LazyVim extra, plugin release automation | M25–M32, M34 | Proposed |
+| M36 | End-user onboarding and release readiness | Quickstart, demo, support files, tagged release, install/help docs | M25–M34, pico-lsp release | Done |
 
 ## Recommended order
 
@@ -109,7 +115,9 @@ client source.
    pico_lsp` (complete). **M33** — standard range formatting, document links,
    and code-lens refresh (complete). **M34** — Tree-sitter installer
    (complete).
-3. **M35** — Mason and LazyVim distribution.
+3. **M36** — end-user onboarding, documentation, and release readiness
+   (complete).
+4. **M35** — Mason and LazyVim distribution; this can follow the manual launch.
 
 The client falls back to `gf` when an older server does not advertise document
 links or range formatting.
@@ -124,6 +132,9 @@ links or range formatting.
   the LSP protocol for client-only features.
 - A `pico8.nvim` tag should be cut only after the corresponding client tests
   pass against a released `pico-lsp` binary.
+- M36 completed the manual v0.1.0 release path, compatibility table,
+  quickstart, support files, and documentation checks. M35 owns release
+  automation and the Mason and LazyVim distribution extras.
 
 ## Testing
 
@@ -135,6 +146,8 @@ links or range formatting.
   glyph cache and prefetch behavior, byte insertion, picker filtering,
   completion, commands, health checks, Tree-sitter installation and failure
   paths, and fallback behavior.
+- `tests/docs.lua` checks local links, anchors, and help tags on Neovim 0.11.4
+  and 0.12.6.
 - Server tests, Go fuzz tests, and LSP e2e tests remain in `pico-lsp`.
 - Manual checks for LazyVim, lazy.nvim, and vanilla `runtimepath` are recorded
   in the milestone checklist.
@@ -142,14 +155,17 @@ links or range formatting.
 ## Documentation map
 
 - [`README.md`](../README.md) — install and feature overview.
+- [`docs/getting-started.md`](getting-started.md) — five-minute quickstart and
+  demo cart.
 - [`docs/install.md`](install.md) — plugin and server installation.
 - [`docs/usage.md`](usage.md) — carts, includes, PNG, glyphs, keymaps.
 - [`docs/configuration.md`](configuration.md) — plugin options and server
   settings.
 - [`docs/troubleshooting.md`](troubleshooting.md) — health, logs, and common
   failures.
-- [`docs/milestones/README.md`](milestones/README.md) — inherited client
-  milestone index.
+- [`docs/release-checklist.md`](release-checklist.md) — release and manual
+  verification matrix.
+- [`docs/milestones/README.md`](milestones/README.md) — client milestone index.
 - [`doc/pico8.txt`](../doc/pico8.txt) — `:help pico8`.
 
 ## Open decisions
@@ -243,6 +259,13 @@ path rather than a shell command; a forced rebuild in a session that already
 loaded the parser reports that a restart is needed; and macOS CI runs the
 installer test with the system compiler. Prebuilt parser assets remain deferred
 until after M34 ships.
+
+M36's decisions were confirmed on 2026-11-24: a manual v0.1.0 tag, a pinned
+`pico-lsp` v1.8.1 release for the core surface, a five-minute quickstart and
+demo cart, an include-aware LuaLS scoping recipe, consumer support files, and
+documentation checks. `pico-lsp` v1.8.1 predates M33, so `gq` and Neovim 0.12
+`gx` are documented as requiring a newer server build. Mason packaging and the
+LazyVim extra remain M35.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

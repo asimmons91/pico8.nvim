@@ -5,12 +5,33 @@
 - `:checkhealth pico_lsp` is the first diagnostic step. It reports the
   configuration, binary and version, clients, client feature state, managed
   includes, helper commands, and Tree-sitter availability.
-- `pico-lsp --version` verifies which binary Neovim would run.
+- `:checkhealth pico_lsp` shows which `pico-lsp` binary Neovim resolves.
+  `pico-lsp --version` in a shell can resolve a different binary when Neovim
+  was launched from a GUI.
 - `:checkhealth vim.lsp` shows Neovim's LSP health and attached clients.
 - `:lua =vim.lsp.get_clients({ bufnr = 0 })` shows the current buffer's clients.
 - `:set filetype?` should report `pico8` in a cart.
 - `:lua =vim.fn.stdpath("data")` shows the data directory used by
   `:Pico8InstallParser`.
+
+## Server binary is not found or is the wrong version
+
+- Run `:checkhealth pico_lsp` and read the Server binary section. It shows the
+  resolved executable, its source, and the `--version` result.
+- If `go install` succeeded but `pico-lsp` is not found, add `$(go env GOPATH)/bin`
+  to `PATH`, reinstall with `GOBIN` set to a directory on `PATH`, or set an
+  absolute `cmd` in `setup()` or `vim.lsp.config`.
+- If Neovim resolves a different binary than your shell, set
+  `PICO_LSP_BIN`/`vim.g.pico_lsp_cmd` or an absolute `cmd`.
+- Install the matching `pico-lsp` release and restart Neovim. The tested pair is
+  `pico8.nvim` v0.1.0 with `pico-lsp` v1.8.1; see
+  [compatibility](install.md#compatibility).
+- On macOS, Gatekeeper may block an unsigned downloaded binary. On Windows,
+  SmartScreen may warn. See the
+  [`pico-lsp` installation guide](https://github.com/asimmons91/pico-lsp/blob/main/docs/install.md)
+  for the platform steps.
+- For offline or air-gapped installs, download the release archive and set
+  `cmd` or `PICO_LSP_BIN` to the local executable.
 
 ## Using `:checkhealth pico_lsp`
 
@@ -22,7 +43,7 @@ called.
 
 Read the report from the top:
 
-1. **Neovim** — 0.11 or newer is required.
+1. **Neovim** — 0.11.4 or newer is required; 0.11.4 and 0.12.6 are tested.
 2. **Configuration** — confirms `vim.lsp.config["pico_lsp"]` is present and
    validates the command shape. A bare-string `cmd` is rejected by Neovim even
    if the health probe can still resolve it. In a fresh session the report says
@@ -81,6 +102,20 @@ executables are errors.
 - If the cart is not loaded and changed outside Neovim, run `:Pico8Refresh`.
 - Check that `lua_ls` and `pico_lsp` are not both attached to the same buffer.
 - The helper ignores unrelated `.lua` files by design.
+
+## LuaLS also attaches to a cart-owned include
+
+- Run `:checkhealth pico_lsp`; the Included `.lua` buffers section warns when
+  `lua_ls` and `pico_lsp` are both attached.
+- Confirm with `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
+- Scope `lua_ls` away from files included by a nearby `.p8` cart with the
+  [include-aware recipe](usage.md#coexisting-with-luals). Do not disable
+  `lua_ls` for unrelated Lua files.
+- The `pico8.attachLua` setting is a VS Code extension setting; it does not
+  control the Neovim helper.
+- A standalone `.lua` cart initially opens as `lua`, so `lua_ls` may already be
+  attached before you switch to `filetype=pico8`. Detach it with
+  `vim.lsp.buf_detach_client` or scope it away for that project.
 
 ## An include stays attached after removal
 
@@ -152,6 +187,9 @@ executables are errors.
 - `gq` uses Neovim's LSP `formatexpr`, which is set only when the server
   advertises `textDocument/rangeFormatting`. Check the attached client:
   `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
+- `pico-lsp` v1.8.1 predates M33 and does not advertise range formatting or
+  document links. Use a newer server build for `gq` and Neovim 0.12 `gx`; `gf`
+  remains the fallback.
 - A custom `formatexpr` is preserved; clear it or call
   `:lua vim.lsp.buf.format()` to format the whole document.
 - Range formatting refuses a change that would alter the line count. The
@@ -163,6 +201,8 @@ executables are errors.
 
 - Neovim 0.11 has no document-link `gx` handling; use `gf` or upgrade to
   Neovim 0.12.
+- `pico-lsp` v1.8.1 predates the M33 document-link capability. Use a newer
+  server build or `gf`.
 - On Neovim 0.12, put the cursor on the include target and check that the
   server advertises `textDocument/documentLink`:
   `:lua =vim.lsp.get_clients({ bufnr = 0 })[1].server_capabilities.documentLinkProvider`.
@@ -258,6 +298,16 @@ executables are errors.
 - Custom `pico8.glyphs` changes need a client restart because the catalog is
   cached per client and cart root.
 
+## Glyphs render as boxes or blank cells
+
+- Inserted P8SCII glyphs are Unicode characters. The terminal font must contain
+  them; this is a font limitation, not an insertion failure.
+- Use `:Pico8InsertGlyph` to inspect the inserted character, or type the literal
+  uppercase letter when a glyph is unavailable.
+- The Shift maps intentionally fall back to the literal key outside Lua code,
+  in `#include` paths, without a client, or after a failed catalog request.
+- Changing the terminal font or fallback font is outside the plugin.
+
 ## Tree-sitter parser does not load
 
 - Run `:checkhealth pico_lsp` and read the Tree-sitter section.
@@ -275,6 +325,19 @@ executables are errors.
   parser targets ABI 14 for Neovim 0.11+.
 - The installer writes only under `stdpath("data")/site`; a write failure names
   the destination path and usually means that directory is not writable.
+
+## Upgrade or uninstall
+
+- Upgrade the plugin tag and the `pico-lsp` binary together, then restart
+  Neovim or use `:lsp restart` on Neovim 0.12+.
+- Re-run `:Pico8InstallParser` after a plugin update that changes the vendored
+  grammar. A rebuild in a session that already loaded the parser needs a
+  restart.
+- Uninstalling the plugin does not remove `pico-lsp`. Remove the binary
+  separately.
+- Remove parser files from `stdpath("data")/site/parser/pico8.*` and
+  `stdpath("data")/site/queries/pico8/` if you installed them.
+- See [installation](install.md#upgrade-and-uninstall) for the full sequence.
 
 ## Logs
 

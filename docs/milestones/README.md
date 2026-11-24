@@ -1,8 +1,9 @@
 # Client milestones
 
-These are the Neovim-client milestones inherited from
-[`pico-lsp`](https://github.com/asimmons91/pico-lsp). The milestone IDs are
-kept for traceability with the server roadmap and the original PRs.
+These are the Neovim-client milestones. Most were inherited from
+[`pico-lsp`](https://github.com/asimmons91/pico-lsp), and their milestone IDs
+are kept for traceability with the server roadmap and the original PRs. M36 is
+a client-local onboarding and release-readiness milestone.
 
 The specifications have been adapted for this repository:
 
@@ -25,9 +26,12 @@ The specifications have been adapted for this repository:
 | M32 | [Health check](M32-nvim-health.md) | Done |
 | M33 | [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md) | Done (server) |
 | M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Done |
+| M36 | [End-user onboarding and release readiness](M36-nvim-onboarding-release.md) | Done |
 
 M33, [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md),
 is implemented in the server repository. The client consumes those capabilities
 and falls back to `gf` when document links or range formatting are unavailable.
+M35 remains the proposed Mason and LazyVim distribution milestone; M36 is the
+manual, tagged-release onboarding path and does not depend on M35.
 
 See the [roadmap](../ROADMAP.md) for the recommended order and release policy.

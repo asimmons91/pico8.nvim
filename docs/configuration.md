@@ -173,6 +173,15 @@ after initialization. Server defaults remain authoritative; the plugin ships no
 duplicate settings table. The authoritative reference is the
 [pico-lsp configuration docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
 
+`pico8.attachLua` in that reference is a VS Code extension setting. In Neovim,
+cart-owned `.lua` attachment is owned by the include helper, not by
+`pico8.attachLua`. See [coexisting with LuaLS](usage.md#coexisting-with-luals)
+for scoping `lua_ls` away from cart-owned includes.
+
+The tested version pair is recorded in
+[installation](install.md#compatibility): `pico8.nvim` v0.1.0, `pico-lsp`
+v1.8.1, Neovim 0.11.4 and 0.12.6.
+
 The shipped client mirrors `settings.pico8` into
 `initializationOptions.pico8` when no explicit `init_options.pico8` is set.
 This makes requests sent during attach, such as the glyph catalog prefetch, see
