@@ -1,8 +1,9 @@
 -- Headless test for M32 `:checkhealth pico_lsp`.
 --
--- Covers the report sections, a real attached cart/include, the missing-binary,
--- function-command, inlay/code-lens warning, lua_ls conflict, disabled-helper
--- paths, and the read-only guarantee.
+-- Covers the report sections, a real attached cart/include, missing/function/
+-- malformed commands, binary and version failures, server log paths,
+-- inlay/code-lens warnings, lua_ls conflicts, stale/disabled helper states, and
+-- the read-only guarantee.
 --
 -- Run with tests/run.sh against a real pico-lsp binary:
 --   PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh

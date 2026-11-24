@@ -656,7 +656,10 @@ local function check_clients()
     if type(client.workspace_folders) == "table" then
       for _, folder in ipairs(client.workspace_folders) do
         if type(folder) == "table" then
-          folders[#folders + 1] = folder.name or folder.uri or "<unnamed>"
+          local label = type(folder.name) == "string" and folder.name
+            or type(folder.uri) == "string" and folder.uri
+            or "<unnamed>"
+          folders[#folders + 1] = label
         else
           folders[#folders + 1] = tostring(folder)
         end
