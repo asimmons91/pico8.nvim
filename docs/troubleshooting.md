@@ -23,9 +23,11 @@ called.
 Read the report from the top:
 
 1. **Neovim** — 0.11 or newer is required.
-2. **Configuration** — confirms `vim.lsp.config["pico_lsp"]` is available and
+2. **Configuration** — confirms `vim.lsp.config["pico_lsp"]` is present and
    validates the command shape. A bare-string `cmd` is rejected by Neovim even
-   if the health probe can still resolve it.
+   if the health probe can still resolve it. In a fresh session the report says
+   the runtime config compiles but has not loaded yet; open a cart to validate
+   its runtime behavior.
 3. **Server binary** — resolves the executable, probes `--version`, and
    compares it with a running client's `server_info.version`. Missing binaries
    include install steps.
