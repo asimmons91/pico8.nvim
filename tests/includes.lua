@@ -575,6 +575,20 @@ vim.bo[png_buf].buflisted = false
 vim.cmd("Pico8ReloadPng")
 assert_equal(vim.bo[png_buf].buflisted, false, "Pico8ReloadPng relisted an unlisted virtual cart")
 vim.bo[png_buf].buflisted = true
+vim.bo[png_buf].path = ""
+vim.cmd("Pico8ReloadPng")
+assert_equal(
+  vim.bo[png_buf].path,
+  includes.path_value(vim.fs.dirname(png_fixture)),
+  "reload did not rescope a cleared path"
+)
+vim.bo[png_buf].path = ".,,"
+vim.cmd("Pico8ReloadPng")
+assert_equal(
+  vim.bo[png_buf].path,
+  includes.path_value(vim.fs.dirname(png_fixture)),
+  "reload did not rescope a default path"
+)
 
 -- A stale restore lists the cart even if an after-ftplugin unlists it ---------
 

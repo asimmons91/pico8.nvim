@@ -582,12 +582,15 @@ local function scope_virtual_path(buf, root_dir, force)
   end
   local tracked = vim.b[buf].pico8_path_scoped
   if tracked and vim.bo[buf].path ~= vim.b[buf].pico8_path_value then
-    -- A later user/plugin value replaced ours; preserve it.
+    -- A later user/plugin value replaced ours. An empty/default value is not a
+    -- fresh local path; scope it again below.
     vim.b[buf].pico8_path_scoped = nil
     vim.b[buf].pico8_path_value = nil
-    return
+    if vim.bo[buf].path ~= "" and vim.bo[buf].path ~= ".,," then
+      return
+    end
   end
-  if force and not tracked and vim.bo[buf].path ~= "" then
+  if force and not tracked and vim.bo[buf].path ~= "" and vim.bo[buf].path ~= ".,," then
     -- A fresh user/plugin path was set during the restore; preserve it.
     return
   end

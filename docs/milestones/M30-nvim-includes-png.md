@@ -263,6 +263,7 @@ When `require("pico_lsp").setup()` enables the helper:
     and client;
   - a custom global `path` survives auto-open, `:buffer`, and reload, and a
     filetype change restores it;
+  - clearing the scoped `path` to empty or `.,,` is re-scoped on reload;
   - a buffer-local `path` set by an after-ftplugin or `FileType` handler
     survives restore and reload, and wins over a custom global `path`;
   - a stale restore lists the cart even if an after-ftplugin unlists it;
@@ -304,9 +305,10 @@ When `require("pico_lsp").setup()` enables the helper:
   reopen, reopening after `:bdelete`, `:bdelete` + `:buffer` + reload,
   `:bunload` + `:buffer` + reload, a custom global path across restore/reload
   and filetype undo, a buffer-local path set by an after-ftplugin/`FileType`
-  handler and its precedence over a custom global path, a stale restore listing
-  a cart while reload preserves an unlisted one, `:saveas`/`:file` path
-  updates, a custom path surviving `:file`, cart
+  handler and its precedence over a custom global path, clearing the scoped
+  path to empty/`.,,` and re-scoping on reload, a stale restore listing a cart
+  while reload preserves an unlisted one, `:saveas`/`:file` path updates, a
+  custom path surviving `:file`, cart
   directories with spaces, semicolons, and glob characters, a `../` include
   resolved from a working directory that does not contain its target, reload,
   command completion, invalid PNGs, client-start failure, the post-decode
