@@ -412,9 +412,9 @@ The same page states plainly what the plugin does not do.
       the demo cart.
 - [x] `examples/hello.p8` and `examples/hello_lib.lua` exist, use the standard
       cart header and `__gfx__` layout, and exercise a tab and an include.
-- [ ] The demo cart was loaded in the PICO-8 runtime. The host has an ARM
-      PICO-8 binary that cannot run here; `pico-lsp` parses the cart and the
-      release checklist records the gap.
+- [ ] The demo cart was loaded in the PICO-8 runtime. That runtime check was not
+      run in this pass; `pico-lsp` parses the cart and the release checklist
+      records the gap.
 - [x] A real terminal capture is in `docs/assets/` and used by the
       README/quickstart with alt text.
 - [x] The LuaLS coexistence recipe is documented and verified.

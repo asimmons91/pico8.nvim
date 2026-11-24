@@ -93,21 +93,24 @@ manual run. Do not mark an unrun platform as passing.
 ## Tag and publish
 
 1. Confirm the release commit is the merged `main` commit and CI is green.
-2. Create an annotated tag with release notes:
+2. Write the release notes to `/tmp/pico8.nvim-v0.1.0-notes.txt`, including the
+   install snippet, quickstart link, compatibility table, and known
+   limitations.
+3. Create an annotated tag with the release notes:
 
    ```sh
    git tag -a v0.1.0 -F /tmp/pico8.nvim-v0.1.0-notes.txt
    git push origin v0.1.0
    ```
 
-3. Publish the GitHub release from the tag:
+4. Publish the GitHub release from the tag:
 
    ```sh
    gh release create v0.1.0 --title "pico8.nvim v0.1.0" \
      --notes-file /tmp/pico8.nvim-v0.1.0-notes.txt --latest
    ```
 
-4. Confirm the release page shows the install snippet, quickstart link, demo
+5. Confirm the release page shows the install snippet, quickstart link, demo
    cart, known limitations, and compatibility table.
 
 ## Repository metadata
@@ -129,6 +132,6 @@ manual run. Do not mark an unrun platform as passing.
 | 2026-11-24 | Linux amd64 | 0.12.6 | v1.8.1 | Pass | Lazy/Vim.pack/vanilla sandbox installs; LuaLS recipe |
 
 CI is the source of truth for Neovim 0.12.6. Local 0.12.5 results do not claim
-0.12.6 coverage. A PICO-8 runtime load was not part of the Linux local run; the
-demo uses the same cart header and `__gfx__` layout as the smoke-test fixture
-and is parsed by `pico-lsp`.
+0.12.6 coverage. A PICO-8 runtime load was not part of this verification pass;
+the demo uses the same cart header and `__gfx__` layout as the smoke-test
+fixture and is parsed by `pico-lsp`.

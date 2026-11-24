@@ -82,19 +82,7 @@ PNG auto-open. `setup()` does that.
 
 ## 3. Open a cart
 
-The repository demo has two code tabs and includes `hello_lib.lua`:
-
-```sh
-nvim examples/hello.p8
-```
-
-Put the cursor on `hello_lib.lua` in the `#include` line and press `gf`, or run
-`:Pico8OpenCart` from the include to return to the cart.
-
-If you installed the plugin through a plugin manager and do not have a
-checkout, copy the [demo cart](../examples/hello.p8) and its
-[include](../examples/hello_lib.lua) to a directory. Or save this minimal cart
-as `hello.p8` and open it:
+Save this minimal cart as `hello.p8` and open it:
 
 ```pico8
 pico-8 cartridge // pico8.com
@@ -120,6 +108,23 @@ end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
+
+```sh
+nvim hello.p8
+```
+
+If you have a checkout, the [repository demo](../examples/hello.p8) adds a
+second code tab and an include. Open it with:
+
+```sh
+nvim examples/hello.p8
+```
+
+Put the cursor on `hello_lib.lua` in the `#include` line and press `gf`, or run
+`:Pico8OpenCart` from the include to return to the cart. If you installed
+through a plugin manager and want the same demo, copy the
+[demo cart](../examples/hello.p8) and its
+[include](../examples/hello_lib.lua) to a directory.
 
 ## 4. Verify
 
@@ -151,8 +156,8 @@ If no client attaches, check `:set filetype?` and
 - Hover over `circfill` or `x` and run completion on `circ`.
 - Add a misspelled PICO-8 API call and watch the diagnostic.
 - Look at the cart budget code lens and statusline. Run `:Pico8CartInfo`.
-- Run `:Pico8Tabs` and pick the second tab.
-- Put the cursor on `#include hello_lib.lua` and press `gf`.
+- If you opened the repository demo, run `:Pico8Tabs` and pick the second tab,
+  then put the cursor on `hello_lib.lua` in the `#include` line and press `gf`.
 - Run `:Pico8InsertGlyph left` or `:Pico8InsertGlyph 139`.
 - Optional: run `:Pico8InstallParser` and start Tree-sitter with the
   [auto-start snippet](install.md#tree-sitter).

@@ -51,7 +51,7 @@ body:
     id: plugin-version
     attributes:
       label: pico8.nvim version or tag
-      description: The release tag, commit, or `:Pico8...` version if available.
+      description: The release tag, commit, or plugin-manager version.
       placeholder: v0.1.0
     validations:
       required: true

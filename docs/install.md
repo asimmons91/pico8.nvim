@@ -1,5 +1,8 @@
 # Installation
 
+For the shortest install-to-first-cart path, use
+[Getting started](getting-started.md). This page is the full reference.
+
 ## Requirements
 
 - Neovim 0.11.4 or newer. This release is tested with 0.11.4 and 0.12.6;
