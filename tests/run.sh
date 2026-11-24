@@ -54,6 +54,11 @@ PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
 PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
   nvim --headless --clean -u NONE \
     --cmd "set runtimepath+=$root" \
+    -l "$root/tests/standard_hooks.lua"
+
+PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \
+  nvim --headless --clean -u NONE \
+    --cmd "set runtimepath+=$root" \
     -l "$root/tests/cart.lua"
 
 PICO8_NVIM_ROOT="$root" PICO_LSP_BIN="$binary" \

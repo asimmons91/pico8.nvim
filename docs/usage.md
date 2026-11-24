@@ -157,6 +157,30 @@ undo hook. `path` is scoped only when it is empty or the default; a custom
 value, including one set by an after-ftplugin or `FileType` handler, is
 preserved. If you set a global `includeexpr`, `gf` uses your expression.
 
+## Formatting and include links
+
+The server advertises standard range formatting, so Neovim sets `formatexpr`
+automatically for `pico8` buffers. `gq` formats the complete lines covered by
+the selection through `textDocument/rangeFormatting`; a single-line selection
+formats that line. The server formats the whole document for context but returns
+only the selected lines.
+
+If formatting would change the line count, the request is refused and the
+buffer is left unchanged. Format the whole document instead:
+
+```vim
+:lua vim.lsp.buf.format()
+```
+
+Non-code cart sections are preserved. Range formatting also works in cart-owned
+`.lua` buffers when an unrelated include in the same cart is missing.
+
+On Neovim 0.12 and newer, `gx` on an `#include` target uses the server's
+document link and passes the resolved file to `vim.ui.open`, which uses the
+system opener. It does not open a Neovim buffer. `gf` remains the in-editor
+navigation path and works on Neovim 0.11+. An older server that does not
+advertise these capabilities simply leaves `gf` as the fallback.
+
 ## Read-only `.p8.png` carts
 
 With the helper enabled, opening a PNG cart directly decodes it:

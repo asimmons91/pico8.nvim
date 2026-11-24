@@ -148,10 +148,14 @@ vim.cmd("normal gcc")
 local commented = vim.api.nvim_buf_get_lines(lib_buf, 0, -1, false)
 assert_equal(commented[1], "-- local commented = true", "gcc on an include")
 
+-- M33 makes Neovim route gq through the server's range formatter. Use the
+-- built-in formatter here to keep this M29 check focused on // comment leaders.
 local original_formatoptions = vim.bo[lib_buf].formatoptions
 local original_textwidth = vim.bo[lib_buf].textwidth
+local original_formatexpr = vim.bo[lib_buf].formatexpr
 vim.bo[lib_buf].formatoptions = "cq"
 vim.bo[lib_buf].textwidth = 30
+vim.bo[lib_buf].formatexpr = ""
 vim.api.nvim_buf_set_lines(lib_buf, 0, -1, false, {
   "// this is a long comment line that should wrap onto another comment line",
 })
@@ -168,6 +172,7 @@ for _, line in ipairs(wrapped) do
 end
 vim.bo[lib_buf].formatoptions = original_formatoptions
 vim.bo[lib_buf].textwidth = original_textwidth
+vim.bo[lib_buf].formatexpr = original_formatexpr
 vim.api.nvim_buf_set_lines(lib_buf, 0, -1, false, { "function lib() end", "", "local value = 1" })
 vim.cmd("silent write")
 

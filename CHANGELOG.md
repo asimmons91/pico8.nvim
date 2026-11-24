@@ -32,5 +32,8 @@
   Tree-sitter checks, plus headless coverage for the healthy, missing-binary,
   function-command, disabled-helper, feature-warning, lua_ls-conflict, and
   no-side-effect paths.
+- Complete M33: consume the server's standard range formatting, document links,
+  and code-lens refresh through Neovim, and add headless `gq` and Neovim 0.12
+  `gx` coverage including the line-count refusal path.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.

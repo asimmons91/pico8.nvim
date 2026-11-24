@@ -6,16 +6,16 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M32 is complete. The plugin ships native LSP configuration,
-cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
-with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
-budget code lens and inlay hints, a cached cart budget statusline with
-`:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment settings, cart variables,
-and `:Pico8OpenCart` for included `.lua` buffers, `gf` navigation for
-`#include` targets, direct `nvim cart.p8.png` decoding, cached P8SCII glyph
-input with byte forms and a filtered picker, and `:checkhealth pico_lsp`. M34
-is proposed; M33 (range formatting, document links, and code-lens refresh)
-remains server work in `pico-lsp`.
+**Status:** M32 and M33 are complete. The plugin ships native LSP
+configuration, cart-aware roots, one-call activation, a buffer-aware
+cart-owned `.lua` helper with managed attachment and `:Pico8Refresh`,
+client-side enabling for the cart budget code lens and inlay hints, a cached
+cart budget statusline with `:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment
+settings, cart variables, and `:Pico8OpenCart` for included `.lua` buffers,
+`gf` navigation for `#include` targets, direct `nvim cart.p8.png` decoding,
+cached P8SCII glyph input with byte forms and a filtered picker, `gq` range
+formatting and Neovim 0.12 `gx` include links, and `:checkhealth pico_lsp`.
+M34 is proposed.
 
 ## Requirements
 
@@ -134,6 +134,9 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - `gf` opens `#include` targets relative to the cart, including quoted paths,
   spaces, nested and absolute paths, and `.p8`/`.p8.png` tab selectors (the
   selector is stripped for `gf`).
+- `gq` formats the selected lines through the server's range formatting.
+  Neovim 0.12 `gx` opens the resolved `#include` target through the document
+  link and `vim.ui.open`; `gf` remains the in-editor path.
 - Read-only `.p8.png` carts open directly with `nvim cart.p8.png`, and through
   `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - `:Pico8InsertGlyph` inserts a glyph by name, decimal byte, or `0x` byte; a
@@ -454,11 +457,11 @@ overrides, cart and include roots, attachment without a shipped config, unsaved
 includes, managed detach, multiple carts, PNG opening and auto-open, glyph
 cache and prefetch behavior, byte insertion, filtered picker and completion,
 cached cart info and statusline text, include and PNG cart
-resolution, `gf` include navigation, refresh debouncing and coalescing,
-included-buffer comment settings and variables, `:Pico8OpenCart`, the cart
-commands, health-check sections and read-only behavior, and fallback behavior.
-The CI workflow checks out the server and builds a test binary on Neovim 0.11
-and 0.12.
+resolution, `gf` include navigation, `gq` range formatting and `gx` document
+links, refresh debouncing and coalescing, included-buffer comment settings and
+variables, `:Pico8OpenCart`, the cart commands, health-check sections and
+read-only behavior, and fallback behavior. The CI workflow checks out the server
+and builds a test binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 
@@ -467,7 +470,8 @@ capabilities. `pico8.nvim` owns the Neovim plugin, filetype runtime files,
 commands, statusline helpers, health checks, and Neovim-specific tests.
 
 The M25–M32 and M34 specs are inherited from `pico-lsp` for traceability. M33
-stays in the server repository because it adds server capabilities.
+is implemented in the server and consumed by Neovim's standard `formatexpr`,
+`gx`, and code-lens-refresh handling.
 
 ## License
 

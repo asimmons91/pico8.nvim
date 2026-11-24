@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M32 is complete. The existing Neovim client surface is present and
-M34 remains proposed.
+**Status:** M32 and M33 are complete. The existing Neovim client surface is
+present and M34 remains proposed.
 
 **Last updated:** 2026-11-24
 
@@ -32,9 +32,10 @@ formatting, and standard LSP capabilities belong to `pico-lsp`.
 | `pico8.nvim` | Lua client, filetype runtime files, commands, statusline helpers, health checks, Neovim tests, editor-only Tree-sitter grammar |
 
 M25–M32 and M34 are inherited milestone IDs from `pico-lsp` for traceability.
-M33 is server-owned and remains in `pico-lsp`. The `pico-lsp`
-`editors/nvim` copy is historical until the migration is complete; this
-repository is the canonical client source.
+M33 is server-owned in `pico-lsp`; this client consumes its standard LSP
+capabilities and tests them here. The `pico-lsp` `editors/nvim` copy is
+historical until the migration is complete; this repository is the canonical
+client source.
 
 ## Current state
 
@@ -68,8 +69,11 @@ repository is the canonical client source.
   configuration, binary and version, running clients, client feature state,
   managed includes, helper commands, and Tree-sitter availability without
   changing state.
+- M33 is complete: the server's range formatting, document links, and
+  code-lens refresh are consumed through Neovim's standard `formatexpr`, `gx`,
+  and refresh support. `tests/standard_hooks.lua` covers `gq`, `gx` on Neovim
+  0.12, and the unchanged-buffer refusal path.
 - M34 is proposed.
-- M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
 ## Milestones
@@ -85,7 +89,7 @@ repository is the canonical client source.
 | M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Done |
 | M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Done |
 | M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Done |
-| M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | External (pico-lsp) |
+| M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | Done |
 | M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Proposed |
 | M35 | Mason and LazyVim extra | Mason package, LazyVim extra, plugin release automation | M25–M32, M34 | Proposed |
 
@@ -98,13 +102,13 @@ repository is the canonical client source.
    included `.lua` settings and `:Pico8OpenCart` (complete). **M30** — include
    navigation and direct PNG opening (complete). **M31** — cached glyph input,
    byte forms, and filtered picker (complete). **M32** — `:checkhealth
-   pico_lsp` (complete).
-3. **M33** — server-owned; ship in `pico-lsp` when ready.
-4. **M34** — parser installer.
-5. **M35** — Mason and LazyVim distribution.
+   pico_lsp` (complete). **M33** — standard range formatting, document links,
+   and code-lens refresh (complete).
+3. **M34** — parser installer.
+4. **M35** — Mason and LazyVim distribution.
 
-M33 can ship before or after the client milestones; the client gracefully
-falls back to `gf` when document links and range formatting are unavailable.
+The client falls back to `gf` when an older server does not advertise document
+links or range formatting.
 
 ## Release and compatibility
 
@@ -218,6 +222,13 @@ cart from a non-health window in the current tab before falling back to the
 previous tab. The Tree-sitter check uses the return value from
 `vim.treesitter.language.add`, because a missing parser returns `nil` rather
 than raising.
+
+M33's implementation choices were confirmed on 2026-11-24: document links use a
+parser-owned path span (quotes included) rather than the whole directive; range
+formatting mirrors document formatting and only refuses missing includes for the
+cart root; the server skips code-lens refresh when `pico8.limits.codeLens` is
+false; and the headless client test uses `gq` on Neovim 0.11+ and `gx` with a
+stubbed `vim.ui.open` only on Neovim 0.12+.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
