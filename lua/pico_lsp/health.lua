@@ -546,7 +546,11 @@ local function check_configuration(config, config_error, cmd, config_state)
       ok("vim.lsp.config['pico_lsp'] is present: lsp/pico_lsp.lua compiles (not loaded yet)")
       info("config runtime behavior is not checked until it is loaded; open a cart to validate it.")
     elseif config_state == "user" then
-      ok("vim.lsp.config['pico_lsp'] has user configuration (not resolved)")
+      if cmd == nil then
+        info("vim.lsp.config['pico_lsp'] has user configuration but no cmd (not resolved)")
+      else
+        ok("vim.lsp.config['pico_lsp'] has user configuration (not resolved)")
+      end
     else
       ok("vim.lsp.config['pico_lsp'] is available")
     end
