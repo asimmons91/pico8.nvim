@@ -272,6 +272,39 @@ wait_detached(custom_lib_buf, "the custom-settings include did not detach again"
 assert_equal(vim.bo[custom_lib_buf].comments, ":---", "detach overwrote custom comments")
 assert_equal(vim.bo[custom_lib_buf].commentstring, "// %s", "detach overwrote a custom commentstring")
 
+-- A custom value in one option does not block the other option.
+vim.bo[custom_lib_buf].comments = ":---"
+vim.bo[custom_lib_buf].commentstring = ""
+vim.cmd("Pico8Refresh")
+wait_attached(custom_lib_buf, "the mixed-settings include did not reattach")
+assert_equal(vim.bo[custom_lib_buf].comments, ":---", "mixed settings overwrote custom comments")
+assert_equal(
+  vim.bo[custom_lib_buf].commentstring,
+  PICO8_COMMENTSTRING,
+  "mixed settings did not fill in an empty commentstring"
+)
+custom_client = initialized_clients(custom_lib_buf)[1]
+vim.lsp.buf_detach_client(custom_lib_buf, custom_client.id)
+wait_detached(custom_lib_buf, "the mixed-settings include did not detach")
+assert_equal(vim.bo[custom_lib_buf].comments, ":---", "mixed detach overwrote custom comments")
+assert_equal(vim.bo[custom_lib_buf].commentstring, "", "mixed detach did not restore an empty commentstring")
+
+-- Exact PICO-8 values are treated as user values: they are not claimed and
+-- are not restored to stock on detach.
+vim.bo[custom_lib_buf].comments = PICO8_COMMENTS
+vim.bo[custom_lib_buf].commentstring = PICO8_COMMENTSTRING
+vim.cmd("Pico8Refresh")
+wait_attached(custom_lib_buf, "the already-PICO-8 include did not reattach")
+custom_client = initialized_clients(custom_lib_buf)[1]
+vim.lsp.buf_detach_client(custom_lib_buf, custom_client.id)
+wait_detached(custom_lib_buf, "the already-PICO-8 include did not detach")
+assert_equal(vim.bo[custom_lib_buf].comments, PICO8_COMMENTS, "detach restored an already-PICO-8 comments value")
+assert_equal(
+  vim.bo[custom_lib_buf].commentstring,
+  PICO8_COMMENTSTRING,
+  "detach restored an already-PICO-8 commentstring value"
+)
+
 -- Empty values are treated as stock and restored as empty --------------------
 
 local empty_project = tmp .. "/empty"
