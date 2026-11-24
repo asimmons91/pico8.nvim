@@ -79,7 +79,8 @@ versions when reporting results.
 - Keep the README installation path compatible with lazy.nvim and LazyVim.
 - Do not duplicate server settings; link the
   [`pico-lsp` configuration reference](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
-- Keep `doc/pico8.txt` tags valid and run `:helptags doc` after editing help.
+- Keep `doc/pico8.txt` tags valid and run `:helptags doc` after editing help;
+  commit the updated `doc/tags`.
 - Update the roadmap, milestone index, and `AGENTS.md` together when a
   milestone moves or changes status.
 
