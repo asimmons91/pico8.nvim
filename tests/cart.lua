@@ -373,7 +373,7 @@ wait_for(function()
   return api().cart_info(include_lib_buf).tokens == api().cart_info(include_cart_buf).tokens
 end, "the include cache did not follow the owning cart refresh")
 
--- Saving a cart refreshes the cache immediately.
+-- Saving a cart refreshes the cache on the next event-loop tick.
 edit(include_cart)
 local save_tokens_before = api().cart_info(include_cart_buf).tokens
 vim.api.nvim_buf_set_lines(include_cart_buf, -1, -1, false, {
@@ -413,13 +413,13 @@ local restore_debounce = patch_request(debounce_client, function(original, self,
   return original(self, method, params, handler, bufnr)
 end)
 local debounce_tokens_before = api().cart_info(include_cart_buf).tokens
-for index = 1, 10 do
+for index = 1, 5 do
   vim.api.nvim_buf_set_lines(include_cart_buf, -1, -1, false, {
     string.format("local debounce_line_%d = %d", index, index),
   })
   fire_text_changed(include_cart_buf)
 end
-vim.wait(150, function()
+vim.wait(100, function()
   return false
 end)
 if debounce_calls ~= 0 then
@@ -504,6 +504,42 @@ end
 if owner_b_after.rootUri == owner_a_uri then
   fail("the include still reports the old owner")
 end
+
+-- A user-started client on an include has no b:pico8_cart. The first response
+-- re-keys to the cart; later responses must keep updating the same cache entry.
+local project_user = tmp .. "/user-include"
+local user_cart = project_user .. "/cart.p8"
+local user_lib = project_user .. "/lib.lua"
+write(user_cart, cart_lines({ '#include "lib.lua"', "user_value = 1" }))
+write(user_lib, { "function user_lib() end" })
+local user_cart_buf = edit(user_cart)
+wait_for(function()
+  return api().cart_info(user_cart_buf) ~= nil
+end, "the user-include cart cache did not populate")
+local user_cart_uri = vim.uri_from_fname(user_cart)
+local user_lib_buf = edit(user_lib)
+wait_for(function()
+  return #clients(user_lib_buf) > 0 and api().cart_info(user_lib_buf) ~= nil
+end, "the user-include buffer did not cache")
+local user_client = clients(user_lib_buf)[1]
+vim.b[user_lib_buf].pico8_cart = nil
+cart().detach(user_client.id, user_lib_buf)
+wait_for(function()
+  return api().cart_info(user_lib_buf) == nil
+end, "the user-include detach did not clear the mapping")
+api().refresh_cart_info(user_lib_buf)
+wait_for(function()
+  local info = api().cart_info(user_lib_buf)
+  return info ~= nil and info.rootUri == user_cart_uri
+end, "the user-include first response did not re-key to the cart")
+local user_tokens_before = api().cart_info(user_lib_buf).tokens
+vim.api.nvim_buf_set_lines(user_lib_buf, -1, -1, false, {
+  "function user_lib_with_more_tokens() return 24680 end",
+})
+fire_text_changed(user_lib_buf)
+wait_for(function()
+  return api().cart_info(user_lib_buf).tokens > user_tokens_before
+end, "a user-started include refresh was rejected after re-keying")
 
 -- A standalone .lua cart omits the compressed segment ----------------------------
 

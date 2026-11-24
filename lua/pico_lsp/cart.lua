@@ -478,13 +478,14 @@ handle_response = function(key, state, generation, attempt, bufnr, uri, client_i
   -- re-attached to a different client while the request was in flight.
   local current_client = client_for(bufnr)
   local current_uri = valid_buffer(bufnr) and document_uri(bufnr) or nil
-  local preferred = current_uri and preferred_key(bufnr, current_uri) or nil
+  local mapped_key = buffer_roots[bufnr]
   local helper_owner = vim.b[bufnr].pico8_cart
   if
     not current_client
     or current_client.id ~= client_id
     or current_uri ~= uri
-    or (not same_uri(preferred, key) and not same_uri(preferred, result.rootUri))
+    or not mapped_key
+    or not same_uri(mapped_key, key)
     or (type(helper_owner) == "string" and helper_owner ~= "" and not same_uri(result.rootUri, helper_owner))
   then
     message = "the pico_lsp client detached before the cart info response arrived"
@@ -641,7 +642,8 @@ function M.owner_changed(bufnr, new_uri)
     return
   end
   local key = buffer_roots[bufnr]
-  if key and (type(new_uri) ~= "string" or new_uri == "" or not same_uri(key, new_uri)) then
+  local changed = not key or type(new_uri) ~= "string" or new_uri == "" or not same_uri(key, new_uri)
+  if changed then
     unmark_buffer(bufnr)
   end
   if type(new_uri) ~= "string" or new_uri == "" then
@@ -650,6 +652,9 @@ function M.owner_changed(bufnr, new_uri)
   local state = root_state[new_uri]
   if state and state.info then
     mark_buffer(bufnr, new_uri, client.id)
+    if not changed then
+      return
+    end
   end
   -- The helper updates ownership during BufWritePost, before the server has
   -- necessarily processed didSave/didChange. Defer so the server sees the new

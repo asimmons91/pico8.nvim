@@ -891,12 +891,38 @@ local function attach_loaded_lua_buffers()
   end
 end
 
+-- Ownership can change for a Lua buffer whose client was started by the user;
+-- M26 only tracks helper-managed attachments. Keep the cart cache's root in
+-- sync for every attached Lua buffer, including user-started clients.
+local function sync_cart_owners()
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].filetype == "lua" then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      local path = name ~= "" and normalize(name) or nil
+      if path then
+        local attached = vim.lsp.get_clients({
+          name = "pico_lsp",
+          bufnr = bufnr,
+          _uninitialized = true,
+        })
+        if #attached > 0 then
+          local cart = find_cart(path)
+          if cart then
+            cart_module.owner_changed(bufnr, vim.uri_from_fname(cart))
+          end
+        end
+      end
+    end
+  end
+end
+
 local function rescan()
   local ok, err = pcall(revalidate_managed)
   if not ok then
     log_debug("pico-lsp: ownership revalidation failed: " .. tostring(err))
   end
   attach_loaded_lua_buffers()
+  sync_cart_owners()
 end
 
 local function close_rescan_timer(cart)

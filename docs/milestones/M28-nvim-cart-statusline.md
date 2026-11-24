@@ -52,9 +52,11 @@ uses a cached value and does not block the statusline.
 - **D1/D2:** `lua/pico_lsp/cart.lua` owns the cache and commands. The shipped
   `lsp/pico_lsp.lua` requires it so base-config users who never call
   `require("pico_lsp").setup()` still get automatic caching and the commands.
-- **D5/D6:** the debounce is 500 ms. Attaches, saves, `InsertLeave`, and a
-  successful PNG reload refresh immediately; `TextChanged` refreshes after the
-  debounce. Read-only virtual buffers are never edit-refreshed.
+- **D5/D6:** the debounce is 500 ms. Attach and a successful PNG reload
+  request immediately; saves and `InsertLeave` request on the next event-loop
+  tick so the server processes `didSave`/`didChange` first; `TextChanged`
+  refreshes after the debounce. Read-only virtual buffers are never
+  edit-refreshed.
 - **D4:** helper-managed includes carry the owning cart URI in
   `b:pico8_cart`. Other Lua buffers start under their own URI and re-key the
   cache to the response's `rootUri` after the first success.
