@@ -1,11 +1,11 @@
 # M30 — Neovim Include Navigation and PNG Opening
 
-**Status:** Proposed — not started.
+**Status:** Done — client work complete.
 
 **Depends on:** pico-lsp M6 (server features), pico-lsp M8 (read-only
 `.p8.png` carts), M25 (drop-in configuration), M26 (helper correctness)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -238,15 +238,40 @@ When `require("pico_lsp").setup()` enables the helper:
 
 ## Exit criteria
 
-- [ ] `gf` opens quoted, unquoted, relative, and `:<tab>` include targets.
-- [ ] Missing includes fail without creating files.
-- [ ] `nvim cart.p8.png` opens a read-only virtual cart when the helper is
+- [x] `gf` opens quoted, unquoted, relative, and `:<tab>` include targets.
+- [x] Missing includes fail without creating files.
+- [x] `nvim cart.p8.png` opens a read-only virtual cart when the helper is
       enabled.
-- [ ] Auto-open is absent when the helper is disabled.
-- [ ] `:Pico8OpenPng` offers file completion.
-- [ ] The original PNG buffer is cleaned up and reload still works.
-- [ ] README and troubleshooting document the behavior.
-- [ ] Headless tests run in CI.
+- [x] Auto-open is absent when the helper is disabled.
+- [x] `:Pico8OpenPng` offers file completion.
+- [x] The original PNG buffer is cleaned up and reload still works.
+- [x] README and troubleshooting document the behavior.
+- [x] Headless tests run in CI.
+
+## Verification
+
+- `tests/includes.lua`, run by `tests/run.sh`, covers `include`/`includeexpr`
+  installation without helper setup, `gf` for quoted, unquoted,
+  whitespace-padded, nested, absolute, space-containing, backslash, and
+  `.p8:2` targets with Neovim's working directory outside the cart, literal
+  `.lua:2` names, missing targets that create no file, option undo and user
+  overrides, virtual-buffer root resolution, direct `.p8.png` auto-open,
+  source-buffer deletion, reload, command completion, invalid PNGs,
+  client-start failure, and the disabled-helper path. It passed on Neovim
+  0.12.5 against a pico-lsp development build.
+- The existing config, helper, correctness, include-buffer, features, cart, and
+  fallback suites pass on the same setup.
+- Confirmed choices: `include` is buffer-local when empty, so a global value is
+  treated as a default and overridden locally; `includeexpr` is local to the
+  buffer, so any non-empty value is preserved. `includeexpr` prefers the
+  complete target on the cursor's `#include` line to recover spaces and literal
+  `.lua:2` names, then falls back to `v:fname`. A failed auto-open leaves the
+  named source buffer as an empty read-only `nofile` buffer. Decoded PNG
+  virtual buffers carry `b:pico8_cart_root` for include navigation.
+- Known behavior: Neovim's `gf` strips a trailing `:2` before calling
+  `includeexpr`; the resolver recovers the original target from the include
+  line. A literal `.lua:2` file opens when Vim's first unmodified-name lookup
+  misses, as it does when only the literal file exists.
 
 ## Risks
 

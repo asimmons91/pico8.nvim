@@ -95,7 +95,7 @@ client.
 
 Unnamed buffers and `pico8-cart:` virtual buffers are not auto-activated by the
 shipped config. The `.p8.png` helper starts its virtual document explicitly with
-the source directory.
+the source directory, including when `nvim cart.p8.png` auto-opens it.
 
 To use a repository-wide root instead, override `root_dir` before opening the
 cart:

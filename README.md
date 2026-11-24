@@ -6,14 +6,15 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M29 is complete. The plugin ships native LSP configuration,
+**Status:** M30 is complete. The plugin ships native LSP configuration,
 cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
 with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
 budget code lens and inlay hints, a cached cart budget statusline with
-`:Pico8CartInfo` and `:Pico8Tabs`, and PICO-8 comment settings, cart variables,
-and `:Pico8OpenCart` for included `.lua` buffers. M30–M32 and M34 are proposed;
-M33 (range formatting, document links, and code-lens refresh) remains server
-work in `pico-lsp`.
+`:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment settings, cart variables,
+and `:Pico8OpenCart` for included `.lua` buffers, `gf` navigation for
+`#include` targets, and direct `nvim cart.p8.png` decoding. M31, M32, and M34
+are proposed; M33 (range formatting, document links, and code-lens refresh)
+remains server work in `pico-lsp`.
 
 ## Requirements
 
@@ -128,7 +129,11 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
 - Cart-owned `.lua` files stay `lua` buffers but use PICO-8's comment leaders,
   expose their owning cart through buffer variables, and can open it with
   `:Pico8OpenCart`.
-- Read-only `.p8.png` carts open through `:Pico8OpenPng` and `:Pico8ReloadPng`.
+- `gf` opens `#include` targets relative to the cart, including quoted paths,
+  spaces, nested and absolute paths, and `.p8`/`.p8.png` tab selectors (the
+  selector is stripped for `gf`).
+- Read-only `.p8.png` carts open directly with `nvim cart.p8.png`, and through
+  `:Pico8OpenPng` and `:Pico8ReloadPng`.
 - The P8SCII glyph picker is available through `:Pico8InsertGlyph`.
 - `pico8/cartInfo` is cached asynchronously and powers a statusline API,
   `:Pico8CartInfo`, and `:Pico8Tabs`. Root carts, cart-owned includes, and
@@ -162,6 +167,56 @@ as read-only:
 decoded `.p8.png` buffer it reports that the buffer is already a cart; on an
 unrelated buffer it reports that no owner was found. Glyph maps remain
 `.p8`-only, and the helper does not change `syntax`, indentation, or filetype.
+
+### Navigating includes
+
+The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
+`gf`, `Ctrl-W f`, and `Ctrl-W gf` open an `#include` target even when the helper
+has never been set up. Paths resolve relative to the cart's directory, not
+Neovim's current directory. Absolute paths stay absolute.
+
+Supported forms include:
+
+```pico8
+#include "lib.lua"
+#include 'lib.lua'
+#include   lib.lua
+#include "sub dir/lib.lua"   -- spaces in a quoted path
+#include "other.p8:2"        -- opens other.p8; the tab selector is stripped
+```
+
+A `:<hex digit>` suffix is stripped only for `.p8` and `.p8.png` targets,
+matching the server. A `.lua:2` path stays a literal filename. `gf` opens the
+file, not a specific tab; use `:Pico8Tabs` to jump to a tab in a cart. Missing
+targets report Neovim's normal `E447`/`E484` error and never create a file.
+
+The ftplugin fills in a default only when the value is empty. A non-empty
+`includeexpr` is preserved as a user value. `include` is global-local, so a
+global value is treated as a default and is overridden locally; changing the
+filetype restores it.
+
+### Opening `.p8.png` carts
+
+With the helper enabled, opening a PNG cart directly decodes it into a
+read-only `pico8-cart:` buffer and attaches the client:
+
+```sh
+nvim path/to/cart.p8.png
+```
+
+The original binary PNG buffer is removed after a successful decode. On a
+decode or client-start failure, the buffer becomes an empty, read-only
+`nofile` buffer with the source name; no binary data is shown. Retry with:
+
+```vim
+:Pico8OpenPng path/to/cart.p8.png
+```
+
+`:Pico8OpenPng` offers file completion, and `:Pico8ReloadPng` re-decodes the
+current virtual cart after the PNG changes. Auto-open is installed only by
+`require("pico_lsp").setup()` when the helper is not disabled; a fresh
+`setup({ disable = true })` installs no PNG autocmd. The shipped
+`lsp/pico_lsp.lua` config alone does not auto-open PNGs.
 
 ### Opt-in LSP features
 
@@ -282,7 +337,7 @@ vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
 
 | Command | Purpose |
 |---|---|
-| `:Pico8OpenPng [path]` | Decode a `.p8.png` cart into a read-only virtual buffer. |
+| `:Pico8OpenPng [path]` | Decode a `.p8.png` cart into a read-only virtual buffer; offers file completion. |
 | `:Pico8ReloadPng` | Re-decode the current virtual `.p8.png` cart. |
 | `:Pico8InsertGlyph [name]` | Insert a P8SCII glyph or open the picker. |
 | `:Pico8Refresh` | Clear the include cache and rescan loaded buffers. |
@@ -343,11 +398,12 @@ PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 
 The tests create temporary carts and exercise config resolution, command-line
 overrides, cart and include roots, attachment without a shipped config, unsaved
-includes, managed detach, multiple carts, PNG opening, glyph insertion, cached
-cart info and statusline text, include and PNG cart resolution, refresh
-debouncing and coalescing, included-buffer comment settings and variables,
-`:Pico8OpenCart`, the cart commands, and fallback behavior. The CI workflow
-checks out the server and builds a test binary on Neovim 0.11 and 0.12.
+includes, managed detach, multiple carts, PNG opening and auto-open, glyph
+insertion, cached cart info and statusline text, include and PNG cart
+resolution, `gf` include navigation, refresh debouncing and coalescing,
+included-buffer comment settings and variables, `:Pico8OpenCart`, the cart
+commands, and fallback behavior. The CI workflow checks out the server and
+builds a test binary on Neovim 0.11 and 0.12.
 
 ## Relationship to pico-lsp
 

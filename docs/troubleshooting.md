@@ -114,14 +114,39 @@ above.
 - If `:Pico8CartInfo` reports `no cart found for this buffer`, check the cart
   or `#include` ownership and the client root.
 
+## `gf` does not open an include
+
+- Check the buffer-local options: `:setlocal include? includeexpr?`. In a `.p8`
+  buffer, `include` should be `^\s*#include\s\+` and `includeexpr` should call
+  `pico_lsp.includes.includeexpr`.
+- The ftplugin fills in defaults only when the value is empty. A global
+  `includeexpr` is preserved as a user value; clear it or set a buffer-local
+  expression if you want PICO-8 navigation.
+- Relative paths resolve against the cart's directory, not Neovim's current
+  directory. Absolute paths stay absolute.
+- Quoted, unquoted, whitespace-padded, nested, and space-containing paths work.
+  A `:<hex digit>` suffix is stripped for `.p8`/`.p8.png` targets; a `.lua:2`
+  filename is literal.
+- `gf` opens the file, not a code tab. Use `:Pico8Tabs` to jump within a cart.
+- A missing target reports `E447`/`E484` and creates neither a buffer nor a
+  file. Check the spelling and the cart directory.
+- `gf` works without the helper. `:Pico8Refresh` rescans LSP ownership; it does
+  not change include navigation.
+
 ## PNG cart fails
 
 - Confirm the file is a valid PICO-8 `.p8.png` cart.
-- Confirm `pico-lsp` is executable and the client is attached.
+- Confirm `pico-lsp` is executable and the client can start.
+- Auto-open is installed by `require("pico_lsp").setup()` only when the helper
+  is enabled. A disabled setup installs no PNG autocmd, and the shipped
+  `lsp/pico_lsp.lua` config alone does not auto-open PNGs.
+- A failed auto-open leaves an empty, read-only `nofile` buffer with the PNG
+  name; raw binary data is never shown. Retry with
+  `:Pico8OpenPng path/to/cart.p8.png`, which offers file completion.
+- Use `:Pico8ReloadPng` after replacing the PNG. It re-decodes the current
+  virtual buffer.
 - Use `pico-lsp decode --output /tmp/cart.p8 cart.p8.png` to test the server
   independently.
-- A failed decode should leave an empty buffer, not binary contents. Auto-open
-  failure handling is proposed in M30.
 
 ## Glyph insertion falls back to uppercase
 

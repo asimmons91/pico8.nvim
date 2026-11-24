@@ -10,6 +10,7 @@
 local M = {}
 
 local cart_module = require("pico_lsp.cart")
+local includes = require("pico_lsp.includes")
 
 M.png_buffers = {}
 
@@ -211,43 +212,10 @@ local function store_include(cart, entry)
   end
 end
 
--- Match the server's splitIncludeTarget: strip a single hex-digit tab suffix
--- only from cartridge include paths. A `.lua:2` path stays literal.
-local function strip_tab_selector(path)
-  if #path < 2 then
-    return path
-  end
-  local digit = path:sub(-1)
-  if path:sub(-2, -2) ~= ":" or not digit:match("%x") then
-    return path
-  end
-  local name = path:sub(1, -3)
-  local lower = name:lower()
-  if lower:sub(-7) ~= ".p8.png" and lower:sub(-3) ~= ".p8" then
-    return path
-  end
-  return name
-end
-
-local function include_target(line)
-  local rest = line:match("^%s*#include%s+(.+)$")
-  if not rest then
-    return nil
-  end
-  rest = vim.trim(rest)
-  local quoted = rest:match('^"([^"]*)"') or rest:match("^'([^']*)'")
-  if quoted then
-    rest = quoted
-  end
-  rest = rest:gsub("\\", "/")
-  rest = strip_tab_selector(rest)
-  return rest
-end
-
 local function parse_targets(lines, directory)
   local targets = {}
   for _, line in ipairs(lines) do
-    local include = include_target(line)
+    local include = includes.target(line)
     if include then
       targets[path_key(normalize(directory .. "/" .. include))] = true
     end
@@ -576,7 +544,11 @@ local function decode_png(path)
     return nil, "timed out waiting for pico8/decodeCart"
   end
   if response.err then
-    return nil, vim.inspect(response.err)
+    local message = type(response.err) == "table" and response.err.message or response.err
+    if type(message) ~= "string" or message == "" then
+      message = vim.inspect(response.err)
+    end
+    return nil, message
   end
   local result = response.result
   if type(result) ~= "table" or not result.text or not result.virtualUri then
@@ -600,31 +572,84 @@ local function open_virtual(result)
   return buf
 end
 
+-- An auto-open failure must never leave the raw PNG loaded. Keep the source
+-- buffer as an empty, read-only nofile buffer so the path stays visible and
+-- :Pico8OpenPng can retry, while writes cannot create an empty PNG.
+local function scratch_png_buffer(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  vim.bo[bufnr].modifiable = true
+  pcall(vim.api.nvim_buf_set_lines, bufnr, 0, -1, false, {})
+  vim.b[bufnr].pico8_virtual_cart = nil
+  vim.b[bufnr].pico8_cart_root = nil
+  vim.bo[bufnr].buftype = "nofile"
+  vim.bo[bufnr].bufhidden = "hide"
+  vim.bo[bufnr].swapfile = false
+  vim.bo[bufnr].modifiable = false
+  vim.bo[bufnr].modified = false
+  if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_get_current_buf() ~= bufnr then
+    pcall(vim.api.nvim_set_current_buf, bufnr)
+  end
+end
+
 function M.open_png(path)
   if M.disabled then
     notify("helper is disabled", vim.log.levels.INFO)
-    return
+    return nil, "helper is disabled"
   end
   path = path or vim.api.nvim_buf_get_name(0)
   if path == "" then
     notify("Pico8OpenPng needs a .p8.png path")
-    return
+    return nil, "Pico8OpenPng needs a .p8.png path"
   end
   path = normalize(path)
   local result, err = decode_png(path)
   if err then
     notify(err, vim.log.levels.ERROR)
-    return
+    return nil, err
   end
-  local buf = open_virtual(result)
+
+  local root_dir = vim.fs.dirname(path)
   local config = resolved_config()
-  config.root_dir = vim.fs.dirname(path)
-  vim.lsp.start(config, { bufnr = buf })
+  config.root_dir = root_dir
+  local buf = open_virtual(result)
+  vim.b[buf].pico8_cart_root = root_dir
+  local ok, started = pcall(vim.lsp.start, config, { bufnr = buf })
+  local client = ok and started and attached_client(buf, started) or nil
+  if not client then
+    local message = ok and "could not attach pico_lsp to the decoded cart" or tostring(started)
+    local deleted, delete_err = pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    if not deleted then
+      log_debug("pico-lsp: could not delete the unattached virtual cart: " .. tostring(delete_err))
+    end
+    notify(message, vim.log.levels.ERROR)
+    return nil, message
+  end
   M.png_buffers[buf] = {
     source = result.sourceUri,
     virtual = result.virtualUri,
     version = tonumber(result.version) or 1,
   }
+  return buf, nil
+end
+
+local function auto_open_png(args)
+  if M.disabled then
+    return
+  end
+  local buf = M.open_png(args.file)
+  if buf then
+    if vim.api.nvim_buf_is_valid(args.buf) then
+      local ok, delete_err = pcall(vim.api.nvim_buf_delete, args.buf, { force = true })
+      if not ok then
+        log_debug("pico-lsp: could not delete the source PNG buffer: " .. tostring(delete_err))
+      end
+    end
+    return
+  end
+  -- M.open_png notified the error; keep the buffer empty and read-only.
+  scratch_png_buffer(args.buf)
 end
 
 local function glyph_label(item)
@@ -1220,8 +1245,15 @@ local function define_commands(enabled)
   end
   vim.api.nvim_create_user_command("Pico8OpenPng", function(args)
     M.open_png(args.args ~= "" and args.args or nil)
-  end, { nargs = "?" })
-  vim.api.nvim_create_user_command("Pico8ReloadPng", M.reload_png, { nargs = 0 })
+  end, {
+    nargs = "?",
+    complete = "file",
+    desc = "Decode a PICO-8 .p8.png cart into a read-only buffer",
+  })
+  vim.api.nvim_create_user_command("Pico8ReloadPng", M.reload_png, {
+    nargs = 0,
+    desc = "Reload the current decoded .p8.png cart",
+  })
   vim.api.nvim_create_user_command("Pico8InsertGlyph", function(args)
     M.insert_glyph(args.args ~= "" and args.args or nil)
   end, { nargs = "?" })
@@ -1314,6 +1346,20 @@ function M.setup(opts)
   end
 
   M.group = vim.api.nvim_create_augroup("pico_lsp_helper", { clear = true })
+  -- `nvim cart.p8.png` decodes through the helper instead of reading binary
+  -- data. The command and autocmd are only installed when the helper is
+  -- enabled; a disabled setup returned above.
+  vim.api.nvim_create_autocmd("BufReadCmd", {
+    group = M.group,
+    pattern = "*.p8.png",
+    callback = function(args)
+      local ok, err = pcall(auto_open_png, args)
+      if not ok then
+        notify("could not auto-open " .. tostring(args.file) .. ": " .. tostring(err), vim.log.levels.ERROR)
+        scratch_png_buffer(args.buf)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("FileType", {
     group = M.group,
     pattern = "lua",

@@ -1,7 +1,7 @@
 # pico8.nvim — Roadmap
 
-**Status:** M29 is complete. The existing Neovim client surface is present and
-the inherited client milestones after M29 are proposed and unimplemented.
+**Status:** M30 is complete. The existing Neovim client surface is present and
+the inherited client milestones after M30 are proposed and unimplemented.
 
 **Last updated:** 2026-11-23
 
@@ -57,7 +57,11 @@ repository is the canonical client source.
   refresh autocmds with a 500 ms debounce, and include/PNG support.
 - M29 is complete: stock-aware PICO-8 comment defaults for managed includes,
   safe restore, `b:pico8_cart`/`b:pico8_cart_root`, and `:Pico8OpenCart`.
-- M30–M32 and M34 are proposed.
+- M30 is complete: buffer-local `include`/`includeexpr`, cart-relative `gf`
+  navigation for quoted/unquoted/nested/absolute includes and `.p8` tab
+  selectors, direct `nvim cart.p8.png` decoding, safe failure buffers, and
+  `:Pico8OpenPng` file completion.
+- M31, M32, and M34 are proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
@@ -71,7 +75,7 @@ repository is the canonical client source.
 | M27 | Code lens and inlay hints | Existing server features visible in stock Neovim | M25, M26 | Done |
 | M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Done |
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Done |
-| M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Proposed |
+| M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Done |
 | M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Proposed |
 | M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Proposed |
 | M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | External (pico-lsp) |
@@ -84,8 +88,9 @@ repository is the canonical client source.
 2. **M25** — configuration foundation (complete). **M26** — harden the include
    helper (complete). **M27** — show the server's lens and hints (complete).
    **M28** — cached cart statusline and tab picker (complete). **M29** —
-   included `.lua` settings and `:Pico8OpenCart` (complete).
-3. **M30–M31** — include/PNG navigation and glyph-input polish.
+   included `.lua` settings and `:Pico8OpenCart` (complete). **M30** — include
+   navigation and direct PNG opening (complete).
+3. **M31** — glyph-input polish.
 4. **M32** — health checks.
 5. **M33** — server-owned; ship in `pico-lsp` when ready.
 6. **M34** — parser installer.
@@ -111,8 +116,8 @@ falls back to `gf` when document links and range formatting are unavailable.
   `PICO_LSP_BIN`.
 - CI checks out or installs the server, then runs the suite on Neovim 0.11 and
   0.12.
-- Tests cover attachment, includes, PNG carts, glyph input, commands, and
-  failure paths.
+- Tests cover attachment, includes, `gf` navigation, PNG carts and auto-open,
+  glyph input, commands, and failure paths.
 - Server tests, Go fuzz tests, and LSP e2e tests remain in `pico-lsp`.
 - Manual checks for LazyVim, lazy.nvim, and vanilla `runtimepath` are recorded
   in the milestone checklist.
@@ -170,6 +175,18 @@ records are module-local, so a plugin reload before detach leaves exact PICO-8
 values in place; this follows the exact-target rule rather than guessing a
 previous value. Setting an option to exactly the target after attach is also
 restored, because it is indistinguishable from the helper's value.
+
+M30's implementation choices were confirmed on 2026-11-23: `include` is
+buffer-local when empty, so a global value is treated as a default and
+overridden locally; `includeexpr` is local to the buffer, so any non-empty
+value is preserved as a user value. `includeexpr` prefers the complete target
+on the cursor's `#include` line, so quoted paths with spaces and literal
+`.lua:2` names survive Neovim's `gf` tokenization, then falls back to
+`v:fname`. Failed PNG auto-open leaves the named source buffer as an empty,
+read-only `nofile` buffer. Decoded `.p8.png` virtual buffers carry
+`b:pico8_cart_root`, so include navigation resolves against the source PNG's
+directory. The PNG autocmd is installed only by an enabled
+`require("pico_lsp").setup()`, never by the shipped config alone.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

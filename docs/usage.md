@@ -121,20 +121,64 @@ Managed includes expose `b:pico8_cart` (the owning cart URI) and
 buffer is already a cart on a `.p8` or `.p8.png` buffer, and reports no owner on
 an unrelated buffer.
 
+## Navigating includes
+
+The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
+`gf`, `Ctrl-W f`, and `Ctrl-W gf` open `#include` targets without requiring the
+helper or an initialized client. A relative target resolves against the cart's
+directory, not Neovim's current directory.
+
+```pico8
+#include "lib.lua"
+#include 'lib.lua'
+#include   lib.lua
+#include "sub dir/lib.lua"
+#include "other.p8:2"
+```
+
+Quoted, unquoted, whitespace-padded, nested, absolute, and space-containing
+paths work. A trailing `:<hex digit>` is stripped only for `.p8` and
+`.p8.png` targets; `.lua:2` stays a literal filename. `gf` opens the file at its
+start, not at a code tab. Use `:Pico8Tabs` for tab navigation. Missing targets
+report Neovim's normal `E447`/`E484` error, and no file is created.
+
+The ftplugin fills in defaults only when the options are empty. A non-empty
+`includeexpr` is preserved as a user value. `include` is global-local: a global
+value is a default and is overridden locally, then restored by the ftplugin
+undo hook. If you set a global `includeexpr`, `gf` uses your expression.
+
 ## Read-only `.p8.png` carts
+
+With the helper enabled, opening a PNG cart directly decodes it:
+
+```sh
+nvim path/to/cart.p8.png
+```
+
+The command and replacement forms are also available:
 
 ```vim
 :Pico8OpenPng path/to/cart.p8.png
 :Pico8ReloadPng
 ```
 
-`:Pico8OpenPng` requests `pico8/decodeCart`, opens a `pico8-cart:` virtual
-buffer, marks it `nomodifiable`, and attaches the existing `pico_lsp` client.
-Use `:Pico8ReloadPng` after replacing the PNG file.
+`:Pico8OpenPng` offers file completion. It requests `pico8/decodeCart`, opens a
+`pico8-cart:` virtual buffer, marks it `nomodifiable`, and attaches the
+`pico_lsp` client. The original PNG buffer is deleted after a successful
+auto-open. `:Pico8ReloadPng` re-decodes the current virtual cart after the PNG
+file changes.
+
+If decoding or client startup fails, the source buffer becomes an empty,
+read-only `nofile` buffer with its name intact; raw binary data is never
+shown. Retry with `:Pico8OpenPng <path>`. Auto-open is installed only when
+`require("pico_lsp").setup()` runs with the helper enabled. A disabled setup
+installs no PNG autocmd, and the shipped `lsp/pico_lsp.lua` config alone does
+not auto-open PNGs.
 
 Navigation, diagnostics, completion, hover, and `pico8/cartInfo` work on the
 virtual buffer; formatting and edits are refused because the PNG is read-only.
-Auto-opening `nvim cart.p8.png` is proposed in M30.
+The virtual buffer also carries `b:pico8_cart_root`, so `gf` resolves includes
+against the source PNG's directory.
 
 For a static fallback:
 

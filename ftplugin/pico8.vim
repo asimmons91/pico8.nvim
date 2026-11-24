@@ -9,6 +9,22 @@ setlocal comments=:---,:--,://
 
 let b:undo_ftplugin = "setlocal commentstring< comments<"
 
+" PICO-8 include navigation. `gf` resolves targets relative to the cart (or a
+" decoded PNG cart's source directory) through lua/pico_lsp/includes.lua; no
+" helper setup is required. Only fill in an empty value, so a user's setting
+" always wins. `include` is global-local: a global value is treated as a default
+" and is overridden buffer-locally, then restored by the undo hook.
+" `includeexpr` is local to the buffer, so a non-empty value is a user value and
+" is left untouched.
+if &l:include == ""
+  let &l:include = '^\s*#include\s\+'
+  let b:undo_ftplugin .= "|setlocal include<"
+endif
+if &l:includeexpr == ""
+  let &l:includeexpr = 'v:lua.require("pico_lsp.includes").includeexpr(v:fname)'
+  let b:undo_ftplugin .= "|setlocal includeexpr<"
+endif
+
 " Optional PICO-8 editor-style glyph shortcuts. Set g:pico8_glyph_maps = 1
 " before opening a cart. In Lua code sections (but not #include paths),
 " Shift-A..Z insert the 26 typeable P8SCII symbols (0x80-0x99) in alphabetical
