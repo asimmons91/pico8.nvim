@@ -127,13 +127,14 @@
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
 - `nvim --headless --clean -u NONE -l tests/docs.lua` checks local Markdown
-  links, anchors, and help tags.
-- `:helptags doc` regenerates the help tags when manually testing.
+  links, anchors, help tag definitions/references, and issue-form input limits.
+- `:helptags doc` regenerates the tracked `doc/tags` file. Commit it after
+  editing help; `tests/docs.lua` fails when it is missing or stale.
 - `git diff --check` is the minimum text sanity check.
 - CI installs Neovim 0.11.4 and 0.12.6 on Ubuntu, builds or downloads a
   `pico-lsp` test binary, and runs the headless tests. A separate docs job
-  checks local links, anchors, and help tags. A macOS job runs the Tree-sitter
-  installer test with the system compiler.
+  checks local links, anchors, help tags, and issue-form limits. A macOS job
+  runs the Tree-sitter installer test with the system compiler.
 
 ## Testing rules
 

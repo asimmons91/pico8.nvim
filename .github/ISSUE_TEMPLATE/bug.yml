@@ -47,27 +47,22 @@ body:
       render: lua
     validations:
       required: false
-  - type: input
-    id: plugin-version
+  - type: textarea
+    id: environment
     attributes:
-      label: pico8.nvim version or tag
-      description: The release tag, commit, or plugin-manager version.
-      placeholder: v0.1.0
-    validations:
-      required: true
-  - type: input
-    id: neovim-version
-    attributes:
-      label: Neovim version
-      description: Output of `nvim --version`.
-      placeholder: NVIM v0.12.6
-    validations:
-      required: true
-  - type: input
-    id: os
-    attributes:
-      label: OS and architecture
-      placeholder: macOS arm64 / Ubuntu amd64 / Windows amd64
+      label: Environment
+      description: |
+        Include:
+        - pico8.nvim version or tag
+        - Neovim version (`nvim --version`)
+        - OS and architecture
+        - pico-lsp version and resolved path from `:checkhealth pico_lsp`
+      placeholder: |
+        pico8.nvim: v0.1.0
+        Neovim: NVIM v0.12.6
+        OS: Ubuntu amd64
+        pico-lsp: v1.8.1 at /home/me/.local/bin/pico-lsp
+      render: text
     validations:
       required: true
   - type: textarea
@@ -76,14 +71,6 @@ body:
       label: ":checkhealth pico_lsp output"
       description: Paste the report. It includes the resolved server binary and client state.
       render: text
-    validations:
-      required: true
-  - type: input
-    id: server-version
-    attributes:
-      label: pico-lsp version and resolved path
-      description: Use `:checkhealth pico_lsp`; the shell `pico-lsp --version` may resolve a different binary.
-      placeholder: v1.8.1 at /home/me/.local/bin/pico-lsp
     validations:
       required: true
   - type: dropdown

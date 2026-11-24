@@ -53,7 +53,7 @@ The same page states plainly what the plugin does not do.
 | D8 | Standalone `.lua` carts | Document the manual `filetype=pico8` path as best-effort, or mark standalone `.lua` carts unsupported. Do not add automatic `.lua` cart detection. |
 | D9 | Tree-sitter | State that `:TSInstall pico8`/`nvim-treesitter` is not the install path. Keep `:Pico8InstallParser`, document optional auto-start, and document parser removal and the Windows compiler limit. |
 | D10 | Support files | Add a bug-report form, security policy, contribution guide, and release checklist. The bug form must request enough diagnostics to reproduce without a round trip. |
-| D11 | Documentation checks | Add a local-link/anchor check and a help-tags check to CI. External links may warn rather than fail. |
+| D11 | Documentation checks | Add local-link/anchor, help-tag definition/reference, and issue-form input-limit checks to CI. External links may warn rather than fail. |
 | D12 | Install paths | Document lazy.nvim, `vim.pack`, and vanilla `runtimepath`, all pinned to the release. State that commands and PNG auto-open require `require("pico_lsp").setup()` because the plugin has no `plugin/` entry. |
 | D13 | Compatibility | Record the tested matrix: `pico8.nvim` v0.1.0, `pico-lsp` v1.8.1, Neovim 0.11.4 and 0.12.6. Do not claim untested Neovim patch releases. |
 | D14 | Distribution boundary | Mason packaging, the LazyVim extra, plugin-managed server downloads, prebuilt parser assets, and release automation stay out of scope and remain M35 or later. |
@@ -75,8 +75,10 @@ The same page states plainly what the plugin does not do.
 - **Versions:** claim `pico-lsp` v1.8.1 and Neovim 0.11.4/0.12.6. The v1.8.1
   release predates M33, so `gq` and Neovim 0.12 `gx` are documented as
   requiring a newer server build; `gf` remains the fallback.
-- **Documentation checks:** local links/anchors and help tags are checked by
-  `tests/docs.lua` on both Neovim versions and in the CI docs job.
+- **Documentation checks:** local links/anchors, help-tag definitions and
+  references, and issue-form input limits are checked by `tests/docs.lua` on
+  both Neovim versions and in the CI docs job. `doc/tags` is tracked and must
+  stay current.
 - **Support files:** add the bug form, security policy, contribution guide,
   and release checklist. Repository metadata and the social preview remain
   manual release-checklist items.

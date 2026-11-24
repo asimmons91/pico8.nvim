@@ -73,21 +73,34 @@ local function cart_owns_lua(path)
     if not target then
       return nil
     end
-    if target:match("%.p8$") or target:match("%.p8%.png$") then
-      target = target:gsub(":%x+$", "")
+    local without_selector = target:gsub(":%x+$", "")
+    if
+      without_selector:match("%.p8$")
+      or without_selector:match("%.p8%.png$")
+    then
+      target = without_selector
     end
     return target
   end
 
+  local function is_absolute(value)
+    return value:sub(1, 1) == "/"
+      or value:match("^%a:[/\\]") ~= nil
+      or value:sub(1, 2) == "\\\\"
+  end
+
   for dir in vim.fs.parents(path) do
-    for _, cart in ipairs(vim.fn.globpath(dir, "*.p8", false, true)) do
+    local carts = vim.fs.find(function(name)
+      return name:match("%.p8$") ~= nil
+    end, { path = dir, type = "file", limit = math.huge })
+    for _, cart in ipairs(carts) do
       local ok, lines = pcall(vim.fn.readfile, cart)
       if ok then
         for _, line in ipairs(lines) do
           local target = include_target(line)
           if target then
             local full
-            if target:match("^/") or target:match("^%a:[/\\]") then
+            if is_absolute(target) then
               full = vim.fs.normalize(target)
             else
               full = vim.fs.normalize(vim.fs.joinpath(dir, target))

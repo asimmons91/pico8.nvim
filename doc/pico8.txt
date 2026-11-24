@@ -185,7 +185,7 @@ or without a client. A cold cache makes one bounded request and warns once per
 client if it fails.
 
 |:Pico8InsertGlyph| accepts an exact name (`left`), a decimal byte (`139`), or
-a hex byte (`0x8b`). Any other argument opens |vim.ui.select| filtered by a
+a hex byte (`0x8b`). Any other argument opens |vim.ui.select()| filtered by a
 case-insensitive substring across the name, description, and byte spellings.
 Command-line completion lists cached canonical names without a request. Byte
 values outside 0..255 are rejected before the server is called. Control glyphs
@@ -232,9 +232,9 @@ The command installs under `stdpath("data")/site`: >text
 <
 It adds `site` to 'runtimepath' once and registers `pico8` in the current
 session. Repeated runs skip an up-to-date parser and repair changed queries.
-|:Pico8InstallParser!| forces a rebuild; a failed rebuild leaves the previous
-parser and queries usable. After a forced rebuild, restart Neovim to load the
-new binary in a session that already loaded the old one.
+|:Pico8InstallParser| with `!` forces a rebuild; a failed rebuild leaves the
+previous parser and queries usable. After a forced rebuild, restart Neovim to
+load the new binary in a session that already loaded the old one.
 
 The grammar directory resolves from `g:pico8_treesitter_source`, then
 `$PICO_LSP_TREE_SITTER`, then `vendor/tree-sitter-pico8` in the plugin. The

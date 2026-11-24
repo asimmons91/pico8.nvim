@@ -130,16 +130,46 @@ for _, path in ipairs(files) do
   end
 end
 
+-- GitHub issue forms allow at most ten inputs. Markdown blocks and config.yml
+-- do not count as inputs.
+for _, path in ipairs(vim.fn.globpath(root .. "/.github/ISSUE_TEMPLATE", "*.yml", false, true)) do
+  if not path:match("config%.yml$") then
+    local text = read(path)
+    local inputs = 0
+    if text then
+      for line in (text .. "\n"):gmatch("(.-)\n") do
+        local kind = line:match("^%s*%-%s*type:%s*(%w+)")
+        if kind and kind ~= "markdown" then
+          inputs = inputs + 1
+        end
+      end
+    end
+    if inputs > 10 then
+      fail(("%s: %d issue-form inputs (maximum 10)"):format(path, inputs))
+    end
+  end
+end
+
+local tags_path = root .. "/doc/tags"
+local committed_tags = read(tags_path)
+if not committed_tags then
+  fail("doc/tags is missing; run :helptags doc and commit it")
+end
+
 local tags_ok, tags_err = pcall(vim.cmd, "helptags " .. vim.fn.fnameescape(root .. "/doc"))
 if not tags_ok then
   fail("helptags failed: " .. tostring(tags_err))
 end
 
 local help_text = read(root .. "/doc/pico8.txt")
-local tags_text = read(root .. "/doc/tags")
+local tags_text = read(tags_path)
 if not help_text or not tags_text then
   fail("doc/pico8.txt or doc/tags is missing")
 else
+  if committed_tags and committed_tags ~= tags_text then
+    fail("doc/tags is stale; run :helptags doc and commit it")
+  end
+
   local generated = {}
   for line in (tags_text .. "\n"):gmatch("(.-)\n") do
     local tag = line:match("^([^\t]+)\t")
@@ -151,6 +181,33 @@ else
     if not generated[tag] then
       fail(("doc/pico8.txt: missing doc/tags entry for %s"):format(tag))
     end
+  end
+
+  local runtime = {}
+  local runtime_tags = read((vim.env.VIMRUNTIME or "") .. "/doc/tags")
+  if runtime_tags then
+    for line in (runtime_tags .. "\n"):gmatch("(.-)\n") do
+      local tag = line:match("^([^\t]+)\t")
+      if tag then
+        runtime[tag] = true
+      end
+    end
+  end
+
+  local init = 1
+  while true do
+    local start, finish, ref = help_text:find("|([^|%s]+)|", init)
+    if not start then
+      break
+    end
+    local before = start > 1 and help_text:sub(start - 1, start - 1) or ""
+    local after = finish < #help_text and help_text:sub(finish + 1, finish + 1) or ""
+    if not before:match("[%w_]") and not after:match("[%w_]") then
+      if not generated[ref] and not runtime[ref] then
+        fail(("doc/pico8.txt: missing help reference |%s|"):format(ref))
+      end
+    end
+    init = finish + 1
   end
 end
 
