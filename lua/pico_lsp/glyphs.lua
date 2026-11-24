@@ -405,6 +405,23 @@ function M.clear(client_id)
   end
 end
 
+-- LspDetach fires per buffer. Keep the cache while the same client still owns
+-- another buffer; clear it when the detaching buffer was the last attachment.
+function M.detach(client_id, bufnr)
+  if client_id == nil then
+    return
+  end
+  local client = vim.lsp.get_client_by_id(client_id)
+  if client then
+    for attached in pairs(client.attached_buffers or {}) do
+      if attached ~= bufnr then
+        return
+      end
+    end
+  end
+  M.clear(client_id)
+end
+
 function M.cache_for(bufnr, client)
   bufnr = resolve_bufnr(bufnr)
   client = client or find_client(bufnr)
@@ -574,7 +591,7 @@ if ok then
     group = glyph_group,
     callback = function(args)
       local data = args.data or {}
-      M.clear(data.client_id)
+      M.detach(data.client_id, data.bufnr or args.buf)
     end,
   })
 end

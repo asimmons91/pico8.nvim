@@ -1662,7 +1662,7 @@ function M.setup(opts)
       if bufnr then
         forget_marker(bufnr, data.client_id)
       end
-      glyphs.clear(data.client_id)
+      glyphs.detach(data.client_id, bufnr)
     end,
   })
 
