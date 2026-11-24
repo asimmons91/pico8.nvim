@@ -24,7 +24,8 @@ Run these before tagging.
 - [x] The same suite passes on Neovim 0.12.6. CI covers both versions; a local
       run may use the nearest installed patch and must record that version.
 - [x] `nvim --headless --clean -u NONE -l tests/docs.lua` passes on both
-      versions. The check regenerates help tags and verifies every tag in
+      versions. The check compares the committed `doc/tags` with a fresh
+      `:helptags` run and verifies every tag definition and reference in
       `doc/pico8.txt`.
 - [x] `tests/standard_hooks.lua` passes against a server build that includes
       M33 (`v1.8.2-0.20261124204614-a51e75329238`), so `gq` and Neovim 0.12
@@ -92,6 +93,7 @@ manual run. Do not mark an unrun platform as passing.
       repository.
 - [x] `doc/pico8.txt` contains `*pico8-install*`, `*pico8-requirements*`, and
       `*pico8-options*`; `:help :Pico8OpenPng` resolves.
+- [x] `doc/tags` is committed and matches a fresh `:helptags doc` run.
 - [x] `docs/release-checklist.md` and `CHANGELOG.md` match the release.
 
 ## Tag and publish

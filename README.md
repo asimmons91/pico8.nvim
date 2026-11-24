@@ -115,7 +115,9 @@ runtime files are available, and keep `filetype plugin on` enabled for the
 `ftplugin` options.
 
 There is no `plugin/` entry: installing the plugin alone does not register the
-commands, start the helper, or install PNG auto-open. Call `setup()` once.
+commands, start the helper, or install PNG auto-open. Call `setup()` once. If
+`:help pico8` reports `E149` after installing from an older tag, run
+`:helptags /path/to/pico8.nvim/doc` once.
 
 For local development before a tagged release:
 

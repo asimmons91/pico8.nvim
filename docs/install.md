@@ -110,7 +110,9 @@ vim.opt.runtimepath:append("/path/to/pico8.nvim")
 require("pico_lsp").setup()
 ```
 
-Keep `filetype plugin on` enabled for the `ftplugin` options.
+Keep `filetype plugin on` enabled for the `ftplugin` options. If `:help pico8`
+reports `E149` after installing from an older tag, run
+`:helptags /path/to/pico8.nvim/doc` once.
 
 ### Local development
 

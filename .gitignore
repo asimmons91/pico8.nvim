@@ -2,4 +2,4 @@
 *.log
 *.swp
 *.swo
-tags
+/tags
