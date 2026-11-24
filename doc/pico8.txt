@@ -86,9 +86,61 @@ Statusline plugins can use it to color the component. A lualine recipe is in
 `README.md`.
 
 ==============================================================================
+INCLUDES                                                   *pico8-includes*
+
+The `pico8` ftplugin sets buffer-local 'include', 'includeexpr', and 'path'
+options, so |gf|, |CTRL-W_f|, and |CTRL-W_gf| open `#include` targets without
+helper setup or a running client. A relative target resolves against the cart's
+directory, not the current directory; absolute paths stay absolute. 'path' is
+scoped to the cart so a plain relative name cannot win from the working
+directory. A custom 'path', including one set by an after-ftplugin or `FileType`
+handler, is preserved, and the scoped path follows `:saveas`/`:file` renames.
+Names starting with `./` or `../` are handled by Vim relative to the working
+directory before 'includeexpr'. Cart directories containing glob characters
+(`[`, `]`, `*`, `?`, or `$`) use 'includeexpr' instead of Vim's raw lookup.
+
+Supported forms include quoted, unquoted, whitespace-padded, nested, and
+space-containing paths. A trailing `:<hex digit>` is stripped only for `.p8`
+and `.p8.png` targets, matching the server. A `.lua:2` filename stays literal.
+|gf| opens the file at its start, not at a code tab; use |:Pico8Tabs| for tabs.
+Missing targets report the normal `E447`/`E484` error and create no file.
+
+Vim tries its unmodified-name lookup before 'includeexpr'. A quoted path whose
+first word is also a file in the cart can therefore open that file; rename it or
+use `:edit` with the full path in that rare case.
+
+The defaults are installed only for empty options. A buffer-local
+'includeexpr' is preserved as a user value. 'include' is global-local, so a
+global value is a default and is overridden locally, then restored by the
+ftplugin undo hook.
+
+==============================================================================
+PNG CARTS                                                     *pico8-png*
+
+With the helper enabled, opening a PNG cart directly decodes it: >sh
+    nvim path/to/cart.p8.png
+<
+The original binary PNG buffer is removed after a successful decode. On a
+decode or client-start failure, the buffer becomes an empty, read-only
+`nofile` buffer with its name intact; raw binary data is never shown. Retry
+with |:Pico8OpenPng|. The command offers file completion. Reopening the same
+PNG with `:edit`, `:split`, or |:Pico8OpenPng| reuses its virtual buffer and
+preserves buffer-local include/expression/path values. A `:bdelete`d or
+unloaded virtual cart restores its virtual options when loaded again; a stale
+restore lists the cart. |:Pico8ReloadPng| restores its text and client and
+keeps a deliberately unlisted buffer unlisted. The virtual buffer carries
+`b:pico8_cart_root` and a scoped 'path', so |gf| resolves includes against the
+PNG's directory.
+
+Auto-open is installed only by `require("pico_lsp").setup()` when the helper is
+enabled. A disabled setup installs no PNG autocmd, and the shipped
+`lsp/pico_lsp.lua` config alone does not auto-open PNGs.
+
+==============================================================================
 COMMANDS                                                   *pico8-commands*
 
-:Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer.
+:Pico8OpenPng [path]     Decode a `.p8.png` cart into a read-only buffer;
+                         offers file completion.
 :Pico8ReloadPng          Reload the current decoded PNG cart.
 :Pico8InsertGlyph [name] Insert a P8SCII glyph or open the picker.
 :Pico8Refresh            Clear the include cache and rescan loaded buffers.
@@ -112,7 +164,7 @@ VARIABLES                                                 *pico8-variables*
 `g:pico_lsp_cmd`         Override the server command.
 `g:pico_lsp_helper_disabled` Disable the included `.lua` helper.
 `b:pico8_cart`           Owning cart URI on a managed include.
-`b:pico8_cart_root`      Owning cart directory on a managed include.
+`b:pico8_cart_root`      Cart directory on a managed include or decoded PNG.
 
 ==============================================================================
 ROADMAP                                                     *pico8-roadmap*

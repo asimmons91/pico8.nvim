@@ -114,14 +114,60 @@ above.
 - If `:Pico8CartInfo` reports `no cart found for this buffer`, check the cart
   or `#include` ownership and the client root.
 
+## `gf` does not open an include
+
+- Check the buffer-local options: `:setlocal include? includeexpr? path?`. In a
+  `.p8` buffer, `include` should be `^\s*#include\s\+`, `includeexpr` should
+  call `pico_lsp.includes.includeexpr`, and `path` should name the cart
+  directory (or a non-existent sentinel for a directory with glob characters).
+  After `:saveas` or `:file`, the scoped `path` follows the new buffer name; a
+  custom `path` is left alone.
+- The ftplugin fills in defaults only when the value is empty. A global
+  `includeexpr` is preserved as a user value; clear it or set a buffer-local
+  expression if you want PICO-8 navigation. A custom `path` is preserved too;
+  set it to the cart directory if you want the scoped lookup.
+- Relative paths resolve against the cart's directory, not Neovim's current
+  directory. Absolute paths stay absolute. The cart-scoped `path` prevents a
+  plain same-named file in the working directory from winning.
+- Vim tries the name it detects before `includeexpr`. For a quoted path such as
+  `"space dir/lib.lua"`, if the first word (`space`) is itself a file in the
+  cart, `gf` can open that file instead. Rename the file or use `:edit` with
+  the full path in that rare case. Names starting with `./` or `../` are also
+  handled by Vim relative to the working directory; use an absolute or
+  cart-relative path if a same-named file there would win.
+- Cart directories containing glob characters (`[`, `]`, `*`, `?`, or `$`) are
+  resolved through `includeexpr` rather than Vim's raw lookup. `:find` does not
+  search those directories, but `gf` still opens include targets. Semicolons,
+  spaces, and commas in the cart directory are escaped normally.
+- Quoted, unquoted, whitespace-padded, nested, and space-containing paths work.
+  A `:<hex digit>` suffix is stripped for `.p8`/`.p8.png` targets; a `.lua:2`
+  filename is literal.
+- `gf` opens the file, not a code tab. Use `:Pico8Tabs` to jump within a cart.
+- A missing target reports `E447`/`E484` and creates neither a buffer nor a
+  file. Check the spelling and the cart directory.
+- `gf` works without the helper. `:Pico8Refresh` rescans LSP ownership; it does
+  not change include navigation.
+
 ## PNG cart fails
 
 - Confirm the file is a valid PICO-8 `.p8.png` cart.
-- Confirm `pico-lsp` is executable and the client is attached.
+- Confirm `pico-lsp` is executable and the client can start.
+- Auto-open is installed by `require("pico_lsp").setup()` only when the helper
+  is enabled. A disabled setup installs no PNG autocmd, and the shipped
+  `lsp/pico_lsp.lua` config alone does not auto-open PNGs.
+- A failed auto-open leaves an empty, read-only `nofile` buffer with the PNG
+  name; raw binary data is never shown. Retry with
+  `:Pico8OpenPng path/to/cart.p8.png`, which offers file completion.
+- Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng` reuses the
+  existing virtual buffer and preserves buffer-local include/expression/path
+  values, including a `path` set by an after-ftplugin or `FileType` handler. A
+  custom global `path` is also preserved through restore and reload. Loading a
+  `:bdelete`d or `:bunload`ed virtual cart with `:buffer` restores its virtual
+  options; a stale restore lists the cart. `:Pico8ReloadPng` refreshes its text
+  and client and keeps a deliberately unlisted buffer unlisted.
+  `:Pico8ReloadPng` re-decodes the cart after the PNG changes.
 - Use `pico-lsp decode --output /tmp/cart.p8 cart.p8.png` to test the server
   independently.
-- A failed decode should leave an empty buffer, not binary contents. Auto-open
-  failure handling is proposed in M30.
 
 ## Glyph insertion falls back to uppercase
 

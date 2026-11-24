@@ -10,8 +10,9 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, M28, and M29 are complete. M30–M32 and M34 are proposed. M33
-  remains server-owned in `pico-lsp`. M35 (Mason and LazyVim extra) is proposed.
+- M25, M26, M27, M28, M29, and M30 are complete. M31, M32, and M34 are
+  proposed. M33 remains server-owned in `pico-lsp`. M35 (Mason and LazyVim
+  extra) is proposed.
 - The M27 client module enables the budget code lens and inlay-hint display for
   `pico8` buffers, with `codelens`/`inlay_hints` setup options and
   `:Pico8ToggleInlayHints`. The shipped `lsp/pico_lsp.lua` enables the display
@@ -31,6 +32,21 @@
   are treated as user values, and the command is managed-include only. Restore
   records are module-local, so a plugin reload before detach leaves exact
   PICO-8 values in place. Tests are in `tests/include_buffers.lua`.
+- The M30 include module parses `#include` targets for both the helper and the
+  `pico8` ftplugin. The ftplugin sets buffer-local `include`/`includeexpr` and
+  scopes `path` to the cart without helper setup; the scoped path follows
+  `:saveas`/`:file`, and path metacharacters use an `includeexpr` fallback.
+  `includeexpr` prefers the full target on the cursor's include line so spaces,
+  literal `.lua:2` names, and selector digits survive `gf` tokenization. An
+  enabled `setup` installs a `*.p8.png` `BufReadCmd`, auto-opens through
+  `pico8/decodeCart`, reuses an existing virtual buffer on reopen, preserves
+  custom include/expression/path values (including after-ftplugin/`FileType`
+  values) and a custom global path, restores state and lists the cart after
+  `:bdelete` or a direct `:buffer` load, keeps healthy reloads unlisted when
+  requested, and reattaches on reload. It deletes the source buffer on success
+  and leaves a named empty read-only `nofile` buffer on failure. Decoded PNG
+  virtual buffers carry `b:pico8_cart_root` and a scoped `path`. Tests are in
+  `tests/includes.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and
@@ -58,9 +74,9 @@
 ## Commands
 
 - `PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh` runs the headless Neovim tests
-  (config, helper smoke, M26 correctness, M27 features, M28 cart info, and
-  fallback). The binary must be installed; the test does not build the Go
-  server.
+  (config, helper smoke, M26 correctness, M27 features, M28 cart info, M29
+  include buffers, M30 includes/PNG auto-open, and fallback). The binary must be
+  installed; the test does not build the Go server.
 - `nvim --headless --clean -u NONE --cmd "set runtimepath+=$PWD" -l tests/helper.lua`
   runs the test directly with `PICO8_NVIM_ROOT` set.
 - `:helptags doc` regenerates the help tags when manually testing.

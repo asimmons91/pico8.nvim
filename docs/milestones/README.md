@@ -19,7 +19,7 @@ The specifications have been adapted for this repository:
 | M27 | [Code lens and inlay hints](M27-nvim-lens-inlay.md) | Done |
 | M28 | [Cart budget statusline](M28-nvim-cart-statusline.md) | Done |
 | M29 | [Included `.lua` settings](M29-nvim-include-buffers.md) | Done |
-| M30 | [Include navigation and PNG](M30-nvim-includes-png.md) | Proposed |
+| M30 | [Include navigation and PNG](M30-nvim-includes-png.md) | Done |
 | M31 | [Glyph input](M31-nvim-glyph-input.md) | Proposed |
 | M32 | [Health check](M32-nvim-health.md) | Proposed |
 | M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Proposed |
