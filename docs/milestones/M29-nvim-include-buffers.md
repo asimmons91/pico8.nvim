@@ -1,10 +1,10 @@
 # M29 — PICO-8 Buffer Settings for Cart-Owned Lua Files
 
-**Status:** Proposed — not started.
+**Status:** Done — client work complete.
 
 **Depends on:** M26 (helper correctness)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-23.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -39,6 +39,12 @@ in the current window.
 | D7 | Glyph maps | Do not install PICO-8 Shift glyph mappings on included `.lua` buffers. The existing exclusion stays. |
 | D8 | Formatting | Rely on Neovim's LSP `formatexpr` support when available. Do not force `formatexpr`; range formatting is M33. |
 | D9 | Scope | Only helper-managed cart-owned `.lua` buffers. `.p8` buffers keep their existing ftplugin behavior. |
+
+Confirmed 2026-11-23: D2/D3 apply per option, so a custom `comments` does not
+prevent a stock/empty `commentstring` from being filled in; exact PICO-8 values
+count as user values and are not claimed or restored; D6 is limited to managed
+includes, and the command stays registered after a later disabled setup where it
+reports the disabled helper.
 
 ## Scope
 
@@ -205,14 +211,29 @@ Requirements:
 
 ## Exit criteria
 
-- [ ] Managed includes use `:---,:--,://` and `-- %s` when they had stock Lua
+- [x] Managed includes use `:---,:--,://` and `-- %s` when they had stock Lua
       settings.
-- [ ] Custom comment settings are preserved.
-- [ ] Managed detach restores the previous values only when safe.
-- [ ] `b:pico8_cart` and `b:pico8_cart_root` are available and cleared.
-- [ ] `:Pico8OpenCart` opens the owning cart.
-- [ ] Glyph maps and filetype remain unchanged for includes.
-- [ ] Headless tests cover the behavior in CI.
+- [x] Custom comment settings are preserved.
+- [x] Managed detach restores the previous values only when safe.
+- [x] `b:pico8_cart` and `b:pico8_cart_root` are available and cleared.
+- [x] `:Pico8OpenCart` opens the owning cart.
+- [x] Glyph maps and filetype remain unchanged for includes.
+- [x] Headless tests cover the behavior in CI.
+
+## Verification
+
+- `tests/include_buffers.lua`, run by `tests/run.sh`, covers stock PICO-8
+  comment application, `gcc`, `gq` continuation of `//` blocks, buffer
+  variables, glyph-map exclusion, `:Pico8OpenCart` on includes/carts/PNG/
+  unrelated buffers with spaces in paths, stock and empty restore, custom
+  values, user changes after attach, same-root ownership changes, and the
+  disabled helper path. It passed on Neovim 0.12.5 against a pico-lsp
+  development build.
+- The existing config, helper, correctness, features, cart, and fallback
+  suites pass on the same setup.
+- Confirmed choices: comment defaults apply per option; exact PICO-8 values are
+  treated as user values and are not claimed or restored; `:Pico8OpenCart` is
+  limited to managed includes and remains registered after a disabled setup.
 
 ## Risks
 

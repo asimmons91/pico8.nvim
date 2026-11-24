@@ -46,6 +46,24 @@ above.
 - The helper only detaches clients it recorded as helper-managed. A `pico_lsp`
   client you started yourself remains attached until you stop it.
 
+## `//` comments are not recognized in an include
+
+- Confirm the buffer is helper-managed: `:echo b:pico8_cart` should print the
+  owning cart URI. A user-started client on a `.lua` file is not managed and
+  does not receive PICO-8 comment settings.
+- Check `:setlocal comments?`. A managed include that had stock Lua settings
+  shows `:---,:--,://`. `:gcc` still uses `--` from `commentstring`.
+- If you changed `comments` yourself, the helper leaves your value alone. Add
+  `://` manually, for example `:setlocal comments+=://`, if you want
+  comment-aware formatting to continue `//` blocks.
+- Run `:Pico8Refresh` after an ownership change, or reload the cart after an
+  external edit.
+- `:Pico8OpenCart` opens the owner from a managed include and reports
+  `no owning cart` on unmanaged buffers.
+- Disabling the helper restores the comment values it changed, but leaves a
+  value you changed after attach in place. `b:pico8_cart` and
+  `b:pico8_cart_root` are cleared.
+
 ## Lens or hints are missing
 
 - Confirm a `pico_lsp` client is attached: `:lua =vim.lsp.get_clients({ bufnr = 0 })`.

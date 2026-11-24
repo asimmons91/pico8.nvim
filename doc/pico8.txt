@@ -24,6 +24,13 @@ A loaded cart buffer is the helper's include source. Reload an open cart with
 it does not reload a cart buffer. The helper only detaches attachments it
 created; a client started by the user is left alone.
 
+A managed include keeps `filetype=lua`. When it still has stock Lua comment
+settings, the helper sets `comments=:---,:--,://` so `//` is recognized by
+comment formatting, and `commentstring=--\ %s` so `gcc` uses `--`. Custom values
+are not overwritten. Managed detach, including disabling the helper, restores
+only the values the helper changed and only if they are still in place.
+`b:pico8_cart` holds the owning cart URI and `b:pico8_cart_root` its directory.
+
 Options:
     `cmd`           server command (string, list, or function)
     `lsp`           enable the client during setup (default true)
@@ -85,11 +92,15 @@ COMMANDS                                                   *pico8-commands*
 :Pico8ToggleInlayHints   Toggle client-side inlay hints for this buffer.
 :Pico8CartInfo           Request and show the cart budget with file detail.
 :Pico8Tabs               Pick a code tab and jump to its start line.
+:Pico8OpenCart           Open the cart that owns the current include buffer.
 
 `:Pico8Tabs` explains that tabs belong to the owning cart on an included `.lua`
 buffer, and jumps inside the virtual buffer for a decoded `.p8.png` cart.
+`:Pico8OpenCart` opens the owner in the current window. It reports that the
+buffer is already a cart on a cart or decoded `.p8.png` buffer, and reports no
+owner on an unrelated buffer.
 
-Proposed commands: `:Pico8OpenCart` and `:Pico8InstallParser`.
+Proposed commands: `:Pico8InstallParser`.
 
 ==============================================================================
 VARIABLES                                                 *pico8-variables*
@@ -97,6 +108,8 @@ VARIABLES                                                 *pico8-variables*
 `g:pico8_glyph_maps`     Enable Shift-A..Shift-Z glyph maps.
 `g:pico_lsp_cmd`         Override the server command.
 `g:pico_lsp_helper_disabled` Disable the included `.lua` helper.
+`b:pico8_cart`           Owning cart URI on a managed include.
+`b:pico8_cart_root`      Owning cart directory on a managed include.
 
 ==============================================================================
 ROADMAP                                                     *pico8-roadmap*

@@ -18,7 +18,7 @@ The specifications have been adapted for this repository:
 | M26 | [Helper correctness](M26-nvim-helper-correctness.md) | Done |
 | M27 | [Code lens and inlay hints](M27-nvim-lens-inlay.md) | Done |
 | M28 | [Cart budget statusline](M28-nvim-cart-statusline.md) | Done |
-| M29 | [Included `.lua` settings](M29-nvim-include-buffers.md) | Proposed |
+| M29 | [Included `.lua` settings](M29-nvim-include-buffers.md) | Done |
 | M30 | [Include navigation and PNG](M30-nvim-includes-png.md) | Proposed |
 | M31 | [Glyph input](M31-nvim-glyph-input.md) | Proposed |
 | M32 | [Health check](M32-nvim-health.md) | Proposed |
