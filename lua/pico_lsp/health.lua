@@ -148,11 +148,11 @@ local function get_config()
   end
 
   if type(user_config) == "table" then
-    local config = vim.deepcopy(user_config)
-    if has_runtime and config.cmd == nil then
-      config.cmd = fallback_command()
+    local cmd = user_config.cmd
+    if has_runtime and cmd == nil then
+      cmd = fallback_command()
     end
-    return config, nil
+    return { cmd = cmd }, nil
   end
 
   if has_runtime then
