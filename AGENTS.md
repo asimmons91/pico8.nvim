@@ -59,10 +59,14 @@
   include, helper/command, and Tree-sitter sections. It is read-only: no
   client starts, parser installs, buffer edits, or configuration changes. Only
   the configured binary is spawned with `--version`, with a 2-second timeout;
-  a function-valued `cmd` is never called. It uses the alternate buffer or
-  previous tab to recover the pre-`:checkhealth` cart, treats unset
-  `limits.codeLens` as `true`, and warns about missing helper commands only
-  after an enabled setup. Tests are in `tests/health.lua`.
+  a function-valued `cmd` is never called. In a fresh session it inspects the
+  user config and compiles runtime `lsp/pico_lsp.lua` files without executing
+  them, so health does not register commands or autocmds. It recovers the
+  pre-`:checkhealth` cart from a non-health window in the current tab before
+  the previous tab, treats unset `limits.codeLens` as `true`, and warns about
+  missing helper commands only after an enabled setup. The parser check uses
+  the return value from `language.add`; a missing parser returns `nil` rather
+  than throwing. Tests are in `tests/health.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

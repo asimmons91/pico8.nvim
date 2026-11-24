@@ -211,10 +211,13 @@ M32's implementation choices were confirmed on 2026-11-24: an unset
 when the client display is disabled; missing helper commands warn only after an
 enabled `require("pico_lsp").setup()`, while base-config users get info; and
 the settings report shows selected keys (`apiVersion`, `typeChecking`,
-`inlayHints`, `limits.codeLens`, `diagnostics.mode`) instead of the full table.
-Health reads the pre-`:checkhealth` buffer through the alternate buffer or
-previous tab, because `:checkhealth` switches to its own buffer before running
-checks.
+`inlayHints`, `limits.codeLens`, `diagnostics.mode`) instead of the full
+table. Health inspects a fresh session without executing `lsp/pico_lsp.lua`
+(it compiles the runtime file only), and it recovers the pre-`:checkhealth`
+cart from a non-health window in the current tab before falling back to the
+previous tab. The Tree-sitter check uses the return value from
+`vim.treesitter.language.add`, because a missing parser returns `nil` rather
+than raising.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.

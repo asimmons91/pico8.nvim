@@ -49,8 +49,12 @@ enabled `require("pico_lsp").setup()`; base-config users get info. The settings
 report shows `apiVersion`, `typeChecking`, `inlayHints`, `limits.codeLens`, and
 `diagnostics.mode` instead of the full `pico8` table. Because `:checkhealth`
 switches to its own buffer before running checks, the "current buffer" sections
-use the alternate buffer and then the previous tab's window to find the cart the
-user was editing.
+use a non-health window in the current tab first, then the previous tab. In a
+fresh session, config presence and command resolution are inspected without
+executing `lsp/pico_lsp.lua`; the file is only compiled to catch syntax errors.
+The Tree-sitter check uses the return value from
+`vim.treesitter.language.add`, because a missing parser returns `nil` rather
+than raising.
 
 ## Scope
 
