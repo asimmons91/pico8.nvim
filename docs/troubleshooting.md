@@ -138,10 +138,37 @@ executables are errors.
 
 ## Cart lens or hints are stale after editing an include
 
-- Editing an included `.lua` file re-analyzes it on the server, but the client
-  does not automatically redraw the root cart's lens or hints. Change and save
-  the cart buffer, or restart Neovim, to refresh.
-- Server-driven cross-file refresh belongs to M33.
+- A current server refreshes capable clients after a cart analysis, including
+  edits to a cart-owned `.lua` file. Check that the client is attached and that
+  `pico8.limits.codeLens` is true. The refresh is throttled, so allow a moment
+  after a burst of edits.
+- Neovim 0.11 refreshes the lens on cart saves through the client module.
+  Neovim 0.12 uses its code-lens enable state plus the server refresh.
+- If the lens is still stale, change and save the cart buffer or restart
+  Neovim.
+
+## `gq` does not format or reports an error
+
+- `gq` uses Neovim's LSP `formatexpr`, which is set only when the server
+  advertises `textDocument/rangeFormatting`. Check the attached client:
+  `:lua =vim.lsp.get_clients({ bufnr = 0 })`.
+- A custom `formatexpr` is preserved; clear it or call
+  `:lua vim.lsp.buf.format()` to format the whole document.
+- Range formatting refuses a change that would alter the line count. The
+  buffer is intentionally left unchanged; format the whole document instead.
+- A cart with missing or unreadable includes is refused when formatting the
+  cart root. Fix the include or use the included `.lua` buffer directly.
+
+## `gx` does not open an include
+
+- Neovim 0.11 has no document-link `gx` handling; use `gf` or upgrade to
+  Neovim 0.12.
+- On Neovim 0.12, put the cursor on the include target and check that the
+  server advertises `textDocument/documentLink`:
+  `:lua =vim.lsp.get_clients({ bufnr = 0 })[1].server_capabilities.documentLinkProvider`.
+- `gx` passes the target to `vim.ui.open` and the system opener. It does not
+  open an editor buffer; use `gf` for in-editor navigation.
+- Missing, unreadable, and nested includes intentionally have no link.
 
 ## Cart statusline is empty or stale
 

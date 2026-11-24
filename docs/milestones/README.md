@@ -10,7 +10,8 @@ The specifications have been adapted for this repository:
 - `pico-lsp M*` references point to server milestones;
 - Go test gates belong to `pico-lsp`; this repository runs headless Neovim
   tests;
-- M33 is not duplicated here because it adds server capabilities.
+- M33 is not duplicated here because it adds server capabilities; its client
+  smoke tests live in `tests/standard_hooks.lua`.
 
 | Milestone | Spec | Status |
 |---|---|---|
@@ -22,10 +23,11 @@ The specifications have been adapted for this repository:
 | M30 | [Include navigation and PNG](M30-nvim-includes-png.md) | Done |
 | M31 | [Glyph input](M31-nvim-glyph-input.md) | Done |
 | M32 | [Health check](M32-nvim-health.md) | Done |
+| M33 | [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md) | Done (server) |
 | M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Proposed |
 
 M33, [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md),
-remains in the server repository. The client consumes those capabilities and
-falls back to `gf` when document links or range formatting are unavailable.
+is implemented in the server repository. The client consumes those capabilities
+and falls back to `gf` when document links or range formatting are unavailable.
 
 See the [roadmap](../ROADMAP.md) for the recommended order and release policy.
