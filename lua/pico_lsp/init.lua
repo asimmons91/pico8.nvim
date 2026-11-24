@@ -564,6 +564,21 @@ local function set_virtual_text(buf, text)
   vim.bo[buf].modified = false
 end
 
+-- Apply every option a decoded cart needs. This also restores a buffer after
+-- :bdelete reset its buffer-local state.
+local function apply_virtual_options(buf, result, root_dir)
+  vim.b[buf].pico8_virtual_cart = true
+  vim.b[buf].pico8_cart_root = root_dir
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "hide"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].buflisted = true
+  vim.bo[buf].filetype = "pico8"
+  set_virtual_text(buf, result.text)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].modified = false
+end
+
 local function open_virtual(result, root_dir)
   local buf = vim.api.nvim_create_buf(true, true)
   local named, name_err = pcall(vim.api.nvim_buf_set_name, buf, result.virtualUri)
@@ -571,15 +586,7 @@ local function open_virtual(result, root_dir)
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     return nil, name_err
   end
-  set_virtual_text(buf, result.text)
-  vim.b[buf].pico8_virtual_cart = true
-  vim.b[buf].pico8_cart_root = root_dir
-  vim.bo[buf].buftype = "nofile"
-  vim.bo[buf].filetype = "pico8"
-  vim.bo[buf].bufhidden = "hide"
-  vim.bo[buf].swapfile = false
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].modified = false
+  apply_virtual_options(buf, result, root_dir)
   vim.api.nvim_set_current_buf(buf)
   return buf, nil
 end
@@ -608,22 +615,19 @@ local function find_virtual(virtual_uri)
   return nil
 end
 
--- Escape one 'path' entry. Spaces and commas separate entries; a backslash is
--- the escape character.
-local function path_entry(directory)
-  return (directory:gsub("([\\, ])", "\\%1"))
-end
-
 -- Scope 'path' to the source directory unless the user has a custom value.
 local function scope_virtual_path(buf, root_dir)
   local effective = vim.fn.eval("&path")
   if effective ~= "" and effective ~= ".,," then
     return
   end
-  vim.bo[buf].path = path_entry(root_dir)
+  vim.bo[buf].path = includes.path_value(root_dir)
+  vim.b[buf].pico8_path_scoped = true
+  vim.b[buf].pico8_path_value = vim.bo[buf].path
   local undo = vim.b[buf].undo_ftplugin or ""
   if not undo:find("setlocal path<", 1, true) then
-    vim.b[buf].undo_ftplugin = undo ~= "" and (undo .. "|setlocal path<") or "setlocal path<"
+    local addition = "setlocal path<|unlet! b:pico8_path_scoped b:pico8_path_value"
+    vim.b[buf].undo_ftplugin = undo ~= "" and (undo .. "|" .. addition) or addition
   end
 end
 
@@ -673,6 +677,7 @@ function M.open_png(path)
   local created = false
   local buf = existing
   if buf then
+    apply_virtual_options(buf, result, root_dir)
     vim.api.nvim_set_current_buf(buf)
   else
     local create_err
@@ -684,7 +689,6 @@ function M.open_png(path)
     created = true
   end
 
-  vim.b[buf].pico8_cart_root = root_dir
   scope_virtual_path(buf, root_dir)
   local ok, started = pcall(vim.lsp.start, config, { bufnr = buf })
   local client = ok and started and attached_client(buf, started) or nil
@@ -712,7 +716,6 @@ function M.open_png(path)
     info.source = result.sourceUri
     info.virtual = result.virtualUri
     info.version = (tonumber(info.version) or tonumber(result.version) or 1) + 1
-    set_virtual_text(buf, result.text)
     vim.lsp.buf_notify(buf, "textDocument/didOpen", {
       textDocument = {
         uri = info.virtual,

@@ -174,8 +174,13 @@ The `pico8` ftplugin sets buffer-local `include` and `includeexpr` options, so
 `gf`, `Ctrl-W f`, and `Ctrl-W gf` open an `#include` target even when the helper
 has never been set up. Paths resolve relative to the cart's directory, not
 Neovim's current directory. Absolute paths stay absolute. The ftplugin also
-scopes the buffer-local `path` option to the cart, so Vim's first unmodified-name
-lookup cannot fall back to the working directory. A custom `path` is left alone.
+scopes the buffer-local `path` option to the cart, so a plain relative name
+cannot fall back to the working directory. A custom `path` is left alone, and
+the scoped path follows `:saveas`/`:file` renames. Names starting with `./` or
+`../` are resolved by Vim relative to the working directory before
+`includeexpr`; use an absolute or cart-relative path if that matters. Cart
+directories containing glob characters (`[`, `]`, `*`, `?`, or `$`) are
+resolved through `includeexpr` instead of Vim's raw lookup.
 
 Supported forms include:
 

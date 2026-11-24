@@ -34,14 +34,15 @@
   PICO-8 values in place. Tests are in `tests/include_buffers.lua`.
 - The M30 include module parses `#include` targets for both the helper and the
   `pico8` ftplugin. The ftplugin sets buffer-local `include`/`includeexpr` and
-  scopes `path` to the cart without helper setup; `includeexpr` prefers the
-  full target on the cursor's include line so spaces, literal `.lua:2` names,
-  and selector digits survive `gf` tokenization. An enabled `setup` installs a
-  `*.p8.png` `BufReadCmd`, auto-opens through `pico8/decodeCart`, reuses an
-  existing virtual buffer on reopen, deletes the source buffer on success, and
-  leaves a named empty read-only `nofile` buffer on failure. Decoded PNG
-  virtual buffers carry `b:pico8_cart_root` and a scoped `path`. Tests are in
-  `tests/includes.lua`.
+  scopes `path` to the cart without helper setup; the scoped path follows
+  `:saveas`/`:file`, and path metacharacters use an `includeexpr` fallback.
+  `includeexpr` prefers the full target on the cursor's include line so spaces,
+  literal `.lua:2` names, and selector digits survive `gf` tokenization. An
+  enabled `setup` installs a `*.p8.png` `BufReadCmd`, auto-opens through
+  `pico8/decodeCart`, reuses an existing virtual buffer on reopen, restores it
+  after `:bdelete`, deletes the source buffer on success, and leaves a named
+  empty read-only `nofile` buffer on failure. Decoded PNG virtual buffers carry
+  `b:pico8_cart_root` and a scoped `path`. Tests are in `tests/includes.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

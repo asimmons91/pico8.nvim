@@ -34,7 +34,7 @@ completion.
 
 | ID | Decision | Choice |
 |---|---|---|
-| D1 | Include options | Set `include`, `includeexpr`, and a cart-scoped `path` buffer-locally in `ftplugin/pico8.vim`. Do not require the helper. |
+| D1 | Include options | Set `include`, `includeexpr`, and a cart-scoped `path` buffer-locally in `ftplugin/pico8.vim`. Track renames and use an `includeexpr` fallback for directories with path metacharacters. Do not require the helper. |
 | D2 | Path parsing | Reuse the helper's include-target parsing rules: optional quotes, leading whitespace after `#include`, forward-slash normalization, and a trailing `:<hex digit>` tab selector only for `.p8`/`.p8.png` includes, matching the server. |
 | D3 | Relative paths | Resolve relative paths against the cart's directory, not Neovim's current working directory. Absolute paths stay absolute. |
 | D4 | Missing targets | Return the resolved path and let Neovim report `E484`/not-found normally. Do not create files. |
@@ -90,7 +90,11 @@ In `ftplugin/pico8.vim`, after the existing comment settings:
   resolved path.
 - Scope `path` to the cart directory so Vim's unmodified-name lookup cannot
   fall back to the working directory. Preserve a custom `path`; a virtual PNG
-  buffer gets its source directory from the helper.
+  buffer gets its source directory from the helper. Update the scoped value on
+  `BufFilePost` after `:saveas`/`:file`.
+- Escape path-list separators. For cart directories containing glob or
+  environment characters, use a non-existent path value and let `includeexpr`
+  resolve targets instead of Vim's raw lookup.
 - Preserve user overrides: if the user has already set `include` or
   `includeexpr`, do not replace it. Use `setlocal` only for empty/default values.
 - Add the options to `b:undo_ftplugin` when the ftplugin set them.
@@ -159,8 +163,9 @@ When `require("pico_lsp").setup()` enables the helper:
   buffers.
 - Reuse the existing virtual buffer when the same PNG is opened again with
   `:edit`, `:split`, or `:Pico8OpenPng`; update its text and version instead of
-  creating a duplicate. If a new virtual buffer cannot be named, delete it
-  rather than leaking an unnamed buffer.
+  creating a duplicate. Reapply all virtual buffer options if `:bdelete`
+  reset them. If a new virtual buffer cannot be named, delete it rather than
+  leaking an unnamed buffer.
 - A second `BufReadCmd` must not fire for the `pico8-cart:` virtual buffer.
 
 ### 5. Command completion
@@ -236,10 +241,16 @@ When `require("pico_lsp").setup()` enables the helper:
   - a missing target reports an error and creates no file;
   - the include options and cart-scoped `path` are restored when the filetype
     changes, and a custom `path` is preserved;
+  - `:saveas` and `:file` update the scoped `path`, and `gf` follows the new
+    directory;
+  - cart directories containing semicolons and glob characters do not redirect
+    `gf` to a sibling or parent file;
   - `nvim cart.p8.png` auto-opens a read-only `pico8-cart:` buffer with an
     attached client;
   - reopening or splitting the same PNG reuses the virtual buffer and leaks no
     unnamed buffer;
+  - reopening after `:bdelete` restores the virtual buffer options and scoped
+    path;
   - an invalid `.p8.png` and a client-start failure produce an error, no
     `pico8-cart:` virtual buffer, no binary line content, and no
     `M.png_buffers` entry;
@@ -273,11 +284,13 @@ When `require("pico_lsp").setup()` enables the helper:
   the cart, working-directory decoys, literal `.lua:2` names, missing targets
   that create no file, option undo and user overrides, virtual-buffer root
   resolution, direct `.p8.png` auto-open, source-buffer deletion, reopening and
-  splitting an existing PNG, reload, command completion, invalid PNGs,
-  client-start failure, the post-decode attach failure path, and the
-  disabled-helper path. It passed on Neovim 0.11.4 and 0.12.5 against a
-  pico-lsp development build, and the full suite passes in CI on Neovim 0.11
-  and 0.12.
+  splitting an existing PNG, reopening after `:bdelete`, `:saveas`/`:file`
+  path updates, cart directories with spaces, semicolons, and glob characters,
+  a `../` include resolved from a working directory that does not contain its
+  target, reload, command completion, invalid PNGs, client-start failure, the
+  post-decode attach failure path, and the disabled-helper path. It passed on
+  Neovim 0.11.4 and 0.12.5 against a pico-lsp development build, and the full
+  suite passes in CI on Neovim 0.11 and 0.12.
 - The existing config, helper, correctness, include-buffer, features, cart, and
   fallback suites pass on the same setup.
 - Confirmed choices: `include` is buffer-local when empty, so a global value is
@@ -289,7 +302,8 @@ When `require("pico_lsp").setup()` enables the helper:
   to `v:fname`. A failed auto-open leaves the named source buffer as an empty
   read-only `nofile` buffer. Decoded PNG virtual buffers carry
   `b:pico8_cart_root` and a scoped `path` for include navigation. Reopening a
-  PNG reuses its virtual buffer.
+  PNG reuses its virtual buffer, restores virtual options after `:bdelete`, and
+  the scoped path follows `:saveas`/`:file` renames.
 - Known behavior: Neovim's `gf` strips a trailing `:2` before calling
   `includeexpr`; the resolver recovers the original target from the include
   line. Vim also tries its unmodified-name lookup before `includeexpr`, so a
@@ -307,5 +321,7 @@ When `require("pico_lsp").setup()` enables the helper:
 | `includeexpr` parsing differs from the server's include rules | Reuse the same quote/tab-suffix rules and add fixtures for both forms. |
 | Auto-open leaves an empty or duplicate buffer | Delete the source buffer only after a successful virtual-buffer attach; reuse an existing virtual buffer and test both paths. |
 | `gf` resolves relative to the wrong directory | Scope `path` to the cart and resolve against it, not `getcwd()`; test from a different working directory with decoys. |
+| Renaming or saving a cart leaves a stale scoped path | Track the scoped value and update it on `BufFilePost`; test `:saveas` and `:file`. |
+| Path metacharacters turn the scoped entry into a glob or upward search | Escape separators and use an `includeexpr` sentinel for glob/environment characters; test `;` and `[`. |
 | Vim's first unmodified-name lookup shadows a quoted spaced path | Scope `path` to the cart, document the remaining first-word case, and point to `:edit` for that rare input. |
 | Users expect tab-specific opening | Document the limitation and point to `:Pico8Tabs`. |

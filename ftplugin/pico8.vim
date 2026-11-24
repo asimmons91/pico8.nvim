@@ -34,11 +34,14 @@ if &path == "" || &path == ".,,"
   if s:pico8_cart_dir == ""
     let s:pico8_cart_dir = expand("%:p:h")
   endif
-  if s:pico8_cart_dir != ""
-    let &l:path = escape(s:pico8_cart_dir, ' ,\')
-    let b:undo_ftplugin .= "|setlocal path<"
+  let s:pico8_path = v:lua.require("pico_lsp.includes").path_value(s:pico8_cart_dir)
+  if s:pico8_path != ""
+    let &l:path = s:pico8_path
+    let b:pico8_path_scoped = 1
+    let b:pico8_path_value = &l:path
+    let b:undo_ftplugin .= "|setlocal path<|unlet! b:pico8_path_scoped b:pico8_path_value"
   endif
-  unlet s:pico8_cart_dir
+  unlet s:pico8_cart_dir s:pico8_path
 endif
 
 " Optional PICO-8 editor-style glyph shortcuts. Set g:pico8_glyph_maps = 1

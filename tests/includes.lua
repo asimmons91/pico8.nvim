@@ -18,6 +18,8 @@ vim.fn.mkdir(tmp, "p")
 local project = tmp .. "/project"
 local outside = tmp .. "/outside"
 local absolute = tmp .. "/absolute"
+local deep_cwd = tmp .. "/cwd/deep"
+vim.fn.mkdir(deep_cwd, "p")
 
 local function fail(message)
   vim.api.nvim_err_writeln("pico8.nvim includes: " .. message)
@@ -151,13 +153,15 @@ local cart_buf = edit(cart)
 assert_equal(vim.bo[cart_buf].include, include_pattern, "ftplugin did not set include")
 assert_equal(vim.bo[cart_buf].includeexpr, includeexpr, "ftplugin did not set includeexpr")
 
-local cart_path = vim.fn.escape(project, " ,\\")
+local includes = require("pico_lsp.includes")
+
+local cart_path = includes.path_value(project)
 assert_equal(vim.bo[cart_buf].path, cart_path, "ftplugin did not scope path to the cart")
 
 local function gf(needle, opts)
   opts = opts or {}
   edit(cart)
-  vim.cmd("cd " .. vim.fn.fnameescape(outside))
+  vim.cmd("cd " .. vim.fn.fnameescape(opts.cwd or outside))
   -- The ftplugin scopes 'path' to the cart. A forced case deliberately points
   -- it elsewhere so includeexpr must resolve the target.
   vim.bo.path = opts.force and "/nonexistent-pico8-include-path" or cart_path
@@ -195,7 +199,7 @@ local cases = {
     expected = project .. "/space dir/with space.lua",
     force = true,
   },
-  { needle = "../outside/abs.lua", expected = outside .. "/abs.lua" },
+  { needle = "../outside/abs.lua", expected = outside .. "/abs.lua", cwd = deep_cwd },
   { needle = "literal.lua:2", expected = project .. "/literal.lua:2", force = true },
   { needle = "sub\\back.lua", expected = project .. "/sub/back.lua", force = true },
   { needle = absolute_include, expected = absolute_include },
@@ -232,7 +236,7 @@ write(spaced_project .. "/lib.lua", { "print('spaced cart lib')" })
 local spaced_buf = edit(spaced_cart)
 assert_equal(
   vim.bo[spaced_buf].path,
-  vim.fn.escape(spaced_project, " ,\\"),
+  includes.path_value(spaced_project),
   "ftplugin did not escape a cart path with spaces"
 )
 vim.cmd("cd " .. vim.fn.fnameescape(outside))
@@ -242,6 +246,49 @@ if not spaced_ok then
   fail("gf failed for a cart path with spaces: " .. tostring(spaced_err))
 end
 assert_equal(buffer_name(0), vim.fs.normalize(spaced_project .. "/lib.lua"), "gf resolved a spaced cart path wrong")
+
+-- Glob and semicolon characters in a cart path must not redirect gf.
+
+local meta_project = tmp .. "/meta[1]"
+local meta_cart = meta_project .. "/cart.p8"
+write(meta_cart, {
+  "pico-8 cartridge // pico-8.com",
+  "version 42",
+  "__lua__",
+  '#include "lib.lua"',
+  "x = 1",
+})
+write(meta_project .. "/lib.lua", { "print('meta cart lib')" })
+write(tmp .. "/meta1/lib.lua", { "print('glob decoy')" })
+local meta_buf = edit(meta_cart)
+assert_equal(vim.bo[meta_buf].path, includes.path_value(meta_project), "glob path was not replaced with the sentinel")
+vim.cmd("cd " .. vim.fn.fnameescape(outside))
+vim.api.nvim_win_set_cursor(0, { line_of(meta_buf, "lib.lua"), 12 })
+local meta_ok, meta_err = pcall(vim.cmd, "normal! gf")
+if not meta_ok then
+  fail("gf failed for a cart path with glob characters: " .. tostring(meta_err))
+end
+assert_equal(buffer_name(0), vim.fs.normalize(meta_project .. "/lib.lua"), "gf followed a glob decoy")
+
+local semi_project = tmp .. "/semi;dir"
+local semi_cart = semi_project .. "/cart.p8"
+write(semi_cart, {
+  "pico-8 cartridge // pico-8.com",
+  "version 42",
+  "__lua__",
+  '#include "lib.lua"',
+  "x = 1",
+})
+write(semi_project .. "/lib.lua", { "print('semi cart lib')" })
+local semi_buf = edit(semi_cart)
+assert_equal(vim.bo[semi_buf].path, includes.path_value(semi_project), "semicolon path was not escaped")
+vim.cmd("cd " .. vim.fn.fnameescape(outside))
+vim.api.nvim_win_set_cursor(0, { line_of(semi_buf, "lib.lua"), 12 })
+local semi_ok, semi_err = pcall(vim.cmd, "normal! gf")
+if not semi_ok then
+  fail("gf failed for a cart path with a semicolon: " .. tostring(semi_err))
+end
+assert_equal(buffer_name(0), vim.fs.normalize(semi_project .. "/lib.lua"), "gf searched upward from a semicolon path")
 
 -- A missing target reports a normal error and creates neither a file nor buffer.
 
@@ -257,7 +304,6 @@ end
 
 -- The resolver follows the server's tab-selector rule --------------------------
 
-local includes = require("pico_lsp.includes")
 local directory = vim.fs.normalize(project)
 assert_equal(includes.resolve('#include "literal.lua:2"', directory), directory .. "/literal.lua:2", ".lua:2 should stay literal")
 assert_equal(includes.resolve('#include "nested.p8:2"', directory), directory .. "/nested.p8", ".p8:2 should strip the selector")
@@ -274,6 +320,16 @@ assert_equal(includes.resolve("  lib.lua  ", directory), directory .. "/lib.lua"
 assert_equal(includes.resolve("/tmp/absolute.lua", directory), "/tmp/absolute.lua", "absolute paths should stay absolute")
 assert_equal(includes.resolve("", directory), "", "an empty target should be returned unchanged")
 assert_equal(includes.resolve("#include", directory), "#include", "a directive without a path should stay unchanged")
+assert_equal(
+  includes.path_value("/tmp/a b,c;d"),
+  "/tmp/a\\ b\\,c\\;d",
+  "path entries should escape spaces, commas, and semicolons"
+)
+local meta_path = includes.path_value("/tmp/a[1]")
+assert_equal(includes.path_value("/tmp/a*"), meta_path, "glob metacharacters should share the sentinel")
+if meta_path:find("%[") ~= nil or meta_path:find("%*") ~= nil then
+  fail("path_value left glob metacharacters in the path entry")
+end
 if includes.target("#include") ~= nil then
   fail("a directive without a path parsed as a target")
 end
@@ -288,7 +344,7 @@ local virtual_probe = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_lines(virtual_probe, 0, -1, false, { '#include "virtual.lua"' })
 vim.b[virtual_probe].pico8_cart_root = project
 vim.bo[virtual_probe].filetype = "pico8"
-vim.bo[virtual_probe].path = vim.fn.escape(project, " ,\\")
+vim.bo[virtual_probe].path = includes.path_value(project)
 vim.api.nvim_set_current_buf(virtual_probe)
 vim.cmd("cd " .. vim.fn.fnameescape(outside))
 vim.api.nvim_win_set_cursor(0, { 1, 10 })
@@ -334,6 +390,45 @@ vim.bo[global_expr_buf].filetype = "text"
 assert_equal(vim.fn.eval("&includeexpr"), "GLOBAL_EXPR", "a user includeexpr was not preserved")
 vim.o.includeexpr = ""
 
+-- Renaming a cart updates the scoped path --------------------------------------
+
+local rename_root = tmp .. "/rename"
+local rename_a = rename_root .. "/a"
+local rename_b = rename_root .. "/b"
+local rename_c = rename_root .. "/c"
+write(rename_a .. "/cart.p8", {
+  "pico-8 cartridge // pico-8.com",
+  "version 42",
+  "__lua__",
+  '#include "lib.lua"',
+  "x = 1",
+})
+write(rename_a .. "/lib.lua", { "print('rename a')" })
+write(rename_b .. "/lib.lua", { "print('rename b')" })
+write(rename_c .. "/lib.lua", { "print('rename c')" })
+local rename_buf = edit(rename_a .. "/cart.p8")
+assert_equal(vim.bo[rename_buf].path, includes.path_value(rename_a), "initial rename path is wrong")
+vim.cmd("silent saveas! " .. vim.fn.fnameescape(rename_b .. "/cart.p8"))
+assert_equal(buffer_name(rename_buf), vim.fs.normalize(rename_b .. "/cart.p8"), ":saveas did not rename the buffer")
+assert_equal(vim.bo[rename_buf].path, includes.path_value(rename_b), ":saveas left the old scoped path")
+vim.cmd("cd " .. vim.fn.fnameescape(outside))
+vim.api.nvim_win_set_cursor(0, { line_of(rename_buf, "lib.lua"), 12 })
+local rename_ok, rename_err = pcall(vim.cmd, "normal! gf")
+if not rename_ok then
+  fail("gf failed after :saveas: " .. tostring(rename_err))
+end
+assert_equal(buffer_name(0), vim.fs.normalize(rename_b .. "/lib.lua"), ":saveas left gf in the old directory")
+edit(rename_b .. "/cart.p8")
+vim.cmd("file " .. vim.fn.fnameescape(rename_c .. "/cart.p8"))
+assert_equal(vim.bo[rename_buf].path, includes.path_value(rename_c), ":file did not update the scoped path")
+vim.cmd("cd " .. vim.fn.fnameescape(outside))
+vim.api.nvim_win_set_cursor(0, { line_of(rename_buf, "lib.lua"), 12 })
+local file_ok, file_err = pcall(vim.cmd, "normal! gf")
+if not file_ok then
+  fail("gf failed after :file: " .. tostring(file_err))
+end
+assert_equal(buffer_name(0), vim.fs.normalize(rename_c .. "/lib.lua"), ":file left gf in the old directory")
+
 local local_cart = tmp .. "/undo/local.p8"
 write(local_cart, { "pico-8 cartridge // pico-8.com", "version 42", "__lua__", "x = 1" })
 local local_buf = edit(local_cart)
@@ -367,7 +462,7 @@ end
 assert_equal(vim.fs.normalize(vim.b[png_buf].pico8_cart_root or ""), vim.fs.normalize(vim.fs.dirname(png_fixture)), "auto-open did not set the source directory")
 assert_equal(
   vim.bo[png_buf].path,
-  vim.fn.escape(vim.fs.dirname(png_fixture), " ,\\"),
+  includes.path_value(vim.fs.dirname(png_fixture)),
   "auto-open did not scope path to the source directory"
 )
 if not vim.wait(10000, function()
@@ -426,6 +521,28 @@ vim.cmd("Pico8OpenPng " .. vim.fn.fnameescape(png_fixture))
 assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8OpenPng on an open PNG created a duplicate virtual buffer")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "Pico8OpenPng on an open PNG leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "Pico8OpenPng on an open PNG leaked an unnamed buffer")
+
+-- A :bdelete'd virtual buffer is fully restored when reopened ------------------
+
+vim.cmd("only")
+vim.cmd("bdelete " .. png_buf)
+assert_equal(vim.api.nvim_buf_is_loaded(png_buf), false, "bdelete did not unload the virtual buffer")
+edit(png_fixture)
+assert_equal(vim.api.nvim_get_current_buf(), png_buf, ":bdelete + :edit created a duplicate virtual buffer")
+assert_equal(vim.api.nvim_buf_is_loaded(png_buf), true, "reopened virtual buffer is not loaded")
+assert_equal(vim.bo[png_buf].buftype, "nofile", "reopened virtual buffer is not nofile")
+assert_equal(vim.bo[png_buf].filetype, "pico8", "reopened virtual buffer lost its filetype")
+assert_equal(vim.bo[png_buf].modifiable, false, "reopened virtual buffer is modifiable")
+assert_equal(vim.bo[png_buf].buflisted, true, "reopened virtual buffer is unlisted")
+assert_equal(vim.bo[png_buf].swapfile, false, "reopened virtual buffer enables swap")
+assert_equal(vim.b[png_buf].pico8_virtual_cart, true, "reopened virtual buffer lost its marker")
+assert_equal(
+  vim.bo[png_buf].path,
+  includes.path_value(vim.fs.dirname(png_fixture)),
+  "reopened virtual buffer lost its scoped path"
+)
+assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "reopening after bdelete leaked a buffer")
+assert_equal(unnamed_buffers(), png_unnamed, "reopening after bdelete leaked an unnamed buffer")
 
 -- Invalid PNGs leave an empty named scratch buffer -----------------------------
 

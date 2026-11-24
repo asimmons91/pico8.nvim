@@ -29,6 +29,30 @@ local function is_virtual(name)
     or name:match("[/\\]pico8%-cart:$") ~= nil
 end
 
+-- Vim globs and upward-searches 'path' entries. A directory containing these
+-- characters cannot be represented reliably as a path entry, so use a
+-- non-existent sentinel and let includeexpr resolve the target instead.
+local PATH_META = "[%[%]*?$]"
+
+local function no_lookup_path()
+  if vim.fn.has("win32") == 1 then
+    return "C:/pico8-nvim-no-raw-path-lookup"
+  end
+  return "/pico8-nvim-no-raw-path-lookup"
+end
+
+-- Format one directory for the 'path' option. Spaces, commas, semicolons, and
+-- backslashes need escaping; glob and environment characters use the sentinel.
+function M.path_value(directory)
+  if type(directory) ~= "string" or directory == "" then
+    return ""
+  end
+  if directory:find(PATH_META) ~= nil then
+    return no_lookup_path()
+  end
+  return (directory:gsub("([\\, ;])", "\\%1"))
+end
+
 -- Match the server's splitIncludeTarget: strip a single hex-digit tab suffix
 -- only from cartridge include paths. A `.lua:2` path stays literal.
 local function strip_tab_selector(path)
@@ -179,5 +203,34 @@ function M.includeexpr(fname)
   end
   return M.resolve(target, directory)
 end
+
+-- `:saveas` and `:file` change the buffer name without re-running the
+-- ftplugin. Update the cart-scoped path when the value is still ours.
+local path_group = vim.api.nvim_create_augroup("pico_lsp_includes", { clear = true })
+vim.api.nvim_create_autocmd("BufFilePost", {
+  group = path_group,
+  callback = function(args)
+    local bufnr = args.buf
+    if not vim.api.nvim_buf_is_valid(bufnr) or not vim.b[bufnr].pico8_path_scoped then
+      return
+    end
+    if vim.bo[bufnr].path ~= vim.b[bufnr].pico8_path_value then
+      -- The user replaced the scoped path; leave it alone.
+      vim.b[bufnr].pico8_path_scoped = nil
+      vim.b[bufnr].pico8_path_value = nil
+      return
+    end
+    local directory = vim.b[bufnr].pico8_cart_root
+    if type(directory) ~= "string" or directory == "" then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name == "" or is_virtual(name) then
+        return
+      end
+      directory = vim.fs.dirname(normalize(name))
+    end
+    vim.bo[bufnr].path = M.path_value(directory)
+    vim.b[bufnr].pico8_path_value = vim.bo[bufnr].path
+  end,
+})
 
 return M

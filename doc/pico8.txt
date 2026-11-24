@@ -92,8 +92,12 @@ The `pico8` ftplugin sets buffer-local 'include', 'includeexpr', and 'path'
 options, so |gf|, |CTRL-W_f|, and |CTRL-W_gf| open `#include` targets without
 helper setup or a running client. A relative target resolves against the cart's
 directory, not the current directory; absolute paths stay absolute. 'path' is
-scoped to the cart so a same-named file in the working directory cannot win. A
-custom 'path' is preserved.
+scoped to the cart so a plain relative name cannot win from the working
+directory. A custom 'path' is preserved, and the scoped path follows
+`:saveas`/`:file` renames. Names starting with `./` or `../` are handled by Vim
+relative to the working directory before 'includeexpr'. Cart directories
+containing glob characters (`[`, `]`, `*`, `?`, or `$`) use 'includeexpr'
+instead of Vim's raw lookup.
 
 Supported forms include quoted, unquoted, whitespace-padded, nested, and
 space-containing paths. A trailing `:<hex digit>` is stripped only for `.p8`

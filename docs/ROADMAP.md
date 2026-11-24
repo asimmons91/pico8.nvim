@@ -181,17 +181,20 @@ M30's implementation choices were confirmed on 2026-11-23: `include` is
 buffer-local when empty, so a global value is treated as a default and
 overridden locally; `includeexpr` is local to the buffer, so any non-empty
 value is preserved as a user value; and `path` is scoped to the cart when it is
-empty or the default, with a custom value preserved. `includeexpr` prefers the
-complete target on the cursor's `#include` line, so quoted paths with spaces,
-literal `.lua:2` names, and selector digits survive Neovim's `gf` tokenization,
-then falls back to `v:fname`. Failed PNG auto-open leaves the named source
-buffer as an empty, read-only `nofile` buffer. Reopening a PNG reuses its
-virtual buffer. Decoded `.p8.png` virtual buffers carry `b:pico8_cart_root` and
-a scoped `path`, so include navigation resolves against the source PNG's
-directory. Vim's first unmodified-name lookup can still match the first word of
-a quoted spaced path when that word is a file in the cart; troubleshooting
-documents the workaround. The PNG autocmd is installed only by an enabled
-`require("pico_lsp").setup()`, never by the shipped config alone.
+empty or the default, with a custom value preserved. The scoped path follows
+`:saveas`/`:file`, and directories with path glob characters use `includeexpr`
+instead of Vim's raw lookup. `includeexpr` prefers the complete target on the
+cursor's `#include` line, so quoted paths with spaces, literal `.lua:2` names,
+and selector digits survive Neovim's `gf` tokenization, then falls back to
+`v:fname`. Failed PNG auto-open leaves the named source buffer as an empty,
+read-only `nofile` buffer. Reopening a PNG reuses its virtual buffer and
+restores virtual options after `:bdelete`. Decoded `.p8.png` virtual buffers
+carry `b:pico8_cart_root` and a scoped `path`, so include navigation resolves
+against the source PNG's directory. Vim's first unmodified-name lookup can
+still match the first word of a quoted spaced path when that word is a file in
+the cart; troubleshooting documents the workaround. The PNG autocmd is
+installed only by an enabled `require("pico_lsp").setup()`, never by the
+shipped config alone.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
