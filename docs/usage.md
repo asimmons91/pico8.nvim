@@ -395,6 +395,20 @@ per-file and per-include detail. `:Pico8Tabs` fetches fresh tab lines, opens
 buffer it explains that tabs belong to the owning cart; on a decoded `.p8.png`
 buffer it jumps inside the virtual buffer.
 
+## Health check
+
+Run `:checkhealth pico_lsp` before deeper troubleshooting. The report covers
+the Neovim version, configuration, resolved `pico-lsp` binary and version,
+running clients, active cart feature state, helper-managed includes, optional
+commands, and Tree-sitter availability.
+
+It is read-only: it does not start clients, download a binary, install a
+parser, edit a buffer, or change configuration. The only process it runs is the
+configured binary with `--version`, with a 2-second timeout. A function-valued
+`cmd` is reported but never called. See
+[troubleshooting](troubleshooting.md#using-checkhealth-pico_lsp) for how to read
+each section.
+
 ## Commands
 
 | Command | Status |
@@ -406,5 +420,5 @@ buffer it jumps inside the virtual buffer.
 | `:Pico8ToggleInlayHints` | Available |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Available |
 | `:Pico8OpenCart` | Available |
-| `:checkhealth pico_lsp` | Proposed (M32) |
+| `:checkhealth pico_lsp` | Available |
 | `:Pico8InstallParser` | Proposed (M34) |

@@ -21,7 +21,7 @@ The specifications have been adapted for this repository:
 | M29 | [Included `.lua` settings](M29-nvim-include-buffers.md) | Done |
 | M30 | [Include navigation and PNG](M30-nvim-includes-png.md) | Done |
 | M31 | [Glyph input](M31-nvim-glyph-input.md) | Done |
-| M32 | [Health check](M32-nvim-health.md) | Proposed |
+| M32 | [Health check](M32-nvim-health.md) | Done |
 | M34 | [Tree-sitter installer](M34-nvim-treesitter-install.md) | Proposed |
 
 M33, [Standard LSP Hooks for Neovim](https://github.com/asimmons91/pico-lsp/blob/main/docs/M33-nvim-server-hooks.md),

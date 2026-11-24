@@ -244,9 +244,17 @@ vim.lsp.enable("pico_lsp")
 
 The helper reads the merged `vim.lsp.config["pico_lsp"]` value.
 
+## Health check
+
+Run `:checkhealth pico_lsp` for a read-only report of the configuration,
+resolved binary and version, clients, client feature state, managed includes,
+helper commands, and Tree-sitter availability. It never starts clients,
+installs parsers, edits buffers, or changes configuration. See
+[troubleshooting](troubleshooting.md#using-checkhealth-pico_lsp) for how to
+read the report.
+
 ## Future options
 
 The following are proposed and not available yet:
 
-- `:checkhealth pico_lsp` (M32);
 - `:Pico8InstallParser` (M34).

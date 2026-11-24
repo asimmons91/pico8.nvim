@@ -1,9 +1,9 @@
 # pico8.nvim — Roadmap
 
-**Status:** M30 is complete. The existing Neovim client surface is present and
-the inherited client milestones after M30 are proposed and unimplemented.
+**Status:** M32 is complete. The existing Neovim client surface is present and
+M34 remains proposed.
 
-**Last updated:** 2026-11-23
+**Last updated:** 2026-11-24
 
 **Server:** [`pico-lsp`](https://github.com/asimmons91/pico-lsp)
 
@@ -62,7 +62,13 @@ repository is the canonical client source.
   includes and `.p8` tab selectors, direct `nvim cart.p8.png` decoding with
   virtual-buffer reuse, safe failure buffers, and `:Pico8OpenPng` file
   completion.
-- M31, M32, and M34 are proposed.
+- M31 is complete: cached P8SCII glyph input with attach-time prefetch, byte
+  and name insertion, a filtered picker, and cached-name completion.
+- M32 is complete: `:checkhealth pico_lsp` reports the Neovim version,
+  configuration, binary and version, running clients, client feature state,
+  managed includes, helper commands, and Tree-sitter availability without
+  changing state.
+- M34 is proposed.
 - M33 is an external server dependency.
 - M35 (Mason and LazyVim extra) is proposed after the client surface is stable.
 
@@ -78,7 +84,7 @@ repository is the canonical client source.
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Done |
 | M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Done |
 | M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Done |
-| M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Proposed |
+| M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Done |
 | M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | External (pico-lsp) |
 | M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Proposed |
 | M35 | Mason and LazyVim extra | Mason package, LazyVim extra, plugin release automation | M25–M32, M34 | Proposed |
@@ -91,11 +97,11 @@ repository is the canonical client source.
    **M28** — cached cart statusline and tab picker (complete). **M29** —
    included `.lua` settings and `:Pico8OpenCart` (complete). **M30** — include
    navigation and direct PNG opening (complete). **M31** — cached glyph input,
-   byte forms, and filtered picker (complete).
-3. **M32** — health checks.
-4. **M33** — server-owned; ship in `pico-lsp` when ready.
-5. **M34** — parser installer.
-6. **M35** — Mason and LazyVim distribution.
+   byte forms, and filtered picker (complete). **M32** — `:checkhealth
+   pico_lsp` (complete).
+3. **M33** — server-owned; ship in `pico-lsp` when ready.
+4. **M34** — parser installer.
+5. **M35** — Mason and LazyVim distribution.
 
 M33 can ship before or after the client milestones; the client gracefully
 falls back to `gf` when document links and range formatting are unavailable.
@@ -119,7 +125,7 @@ falls back to `gf` when document links and range formatting are unavailable.
   0.12.
 - Tests cover attachment, includes, `gf` navigation, PNG carts and auto-open,
   glyph cache and prefetch behavior, byte insertion, picker filtering,
-  completion, commands, and failure paths.
+  completion, commands, health checks, and failure paths.
 - Server tests, Go fuzz tests, and LSP e2e tests remain in `pico-lsp`.
 - Manual checks for LazyVim, lazy.nvim, and vanilla `runtimepath` are recorded
   in the milestone checklist.
@@ -199,6 +205,19 @@ unmodified-name lookup can still match the first word of a quoted spaced path
 when that word is a file in the cart; troubleshooting documents the workaround.
 The PNG autocmd is installed only by an enabled `require("pico_lsp").setup()`,
 never by the shipped config alone.
+
+M32's implementation choices were confirmed on 2026-11-24: an unset
+`pico8.limits.codeLens` is treated as the server default `true`, so health warns
+when the client display is disabled; missing helper commands warn only after an
+enabled `require("pico_lsp").setup()`, while base-config users get info; and
+the settings report shows selected keys (`apiVersion`, `typeChecking`,
+`inlayHints`, `limits.codeLens`, `diagnostics.mode`) instead of the full
+table. Health inspects a fresh session without executing `lsp/pico_lsp.lua`
+(it compiles the runtime file only), and it recovers the pre-`:checkhealth`
+cart from a non-health window in the current tab before falling back to the
+previous tab. The Tree-sitter check uses the return value from
+`vim.treesitter.language.add`, because a missing parser returns `nil` rather
+than raising.
 
 1. **Server distribution:** Mason package versus PATH/installation docs;
    plugin-managed downloads are deferred.
