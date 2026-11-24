@@ -159,8 +159,10 @@ above.
   name; raw binary data is never shown. Retry with
   `:Pico8OpenPng path/to/cart.p8.png`, which offers file completion.
 - Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng` reuses the
-  existing virtual buffer. `:Pico8ReloadPng` re-decodes it after the PNG
-  changes.
+  existing virtual buffer and preserves buffer-local include/expression/path
+  values. Loading a `:bdelete`d virtual cart with `:buffer` restores its
+  virtual options; `:Pico8ReloadPng` refreshes its text and client.
+  `:Pico8ReloadPng` re-decodes it after the PNG changes.
 - Use `pico-lsp decode --output /tmp/cart.p8 cart.p8.png` to test the server
   independently.
 

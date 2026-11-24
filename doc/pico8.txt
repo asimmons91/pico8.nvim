@@ -124,7 +124,9 @@ The original binary PNG buffer is removed after a successful decode. On a
 decode or client-start failure, the buffer becomes an empty, read-only
 `nofile` buffer with its name intact; raw binary data is never shown. Retry
 with |:Pico8OpenPng|. The command offers file completion. Reopening the same
-PNG with `:edit`, `:split`, or |:Pico8OpenPng| reuses its virtual buffer.
+PNG with `:edit`, `:split`, or |:Pico8OpenPng| reuses its virtual buffer and
+preserves buffer-local include/expression/path values. A `:bdelete`d virtual
+cart is restored when loaded again or reloaded with |:Pico8ReloadPng|.
 |:Pico8ReloadPng| re-decodes the current virtual cart. The virtual buffer
 carries `b:pico8_cart_root` and a scoped 'path', so |gf| resolves includes
 against the PNG's directory.

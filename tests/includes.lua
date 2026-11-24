@@ -428,6 +428,10 @@ if not file_ok then
   fail("gf failed after :file: " .. tostring(file_err))
 end
 assert_equal(buffer_name(0), vim.fs.normalize(rename_c .. "/lib.lua"), ":file left gf in the old directory")
+edit(rename_c .. "/cart.p8")
+vim.bo[rename_buf].path = "/custom/path"
+vim.cmd("file " .. vim.fn.fnameescape(rename_a .. "/cart.p8"))
+assert_equal(vim.bo[rename_buf].path, "/custom/path", ":file replaced a custom path")
 
 local local_cart = tmp .. "/undo/local.p8"
 write(local_cart, { "pico-8 cartridge // pico-8.com", "version 42", "__lua__", "x = 1" })
@@ -508,17 +512,36 @@ end
 
 local png_buffer_count = #vim.api.nvim_list_bufs()
 local png_unnamed = unnamed_buffers()
+
+local function set_custom_png_options()
+  vim.bo[png_buf].include = "^USER_INCLUDE"
+  vim.bo[png_buf].includeexpr = "USER_EXPR"
+  vim.bo[png_buf].path = "/custom/path"
+end
+
+local function assert_custom_png_options(label)
+  assert_equal(vim.bo[png_buf].include, "^USER_INCLUDE", label .. " reset include")
+  assert_equal(vim.bo[png_buf].includeexpr, "USER_EXPR", label .. " reset includeexpr")
+  assert_equal(vim.bo[png_buf].path, "/custom/path", label .. " reset path")
+end
+
+set_custom_png_options()
 edit(png_fixture)
 assert_equal(vim.api.nvim_get_current_buf(), png_buf, "reopening the PNG created a duplicate virtual buffer")
+assert_custom_png_options("reopening the PNG")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "reopening the PNG leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "reopening the PNG leaked an unnamed buffer")
+set_custom_png_options()
 vim.cmd("cd " .. vim.fn.fnameescape(tmp))
 vim.cmd("split " .. vim.fn.fnameescape(png_fixture))
 assert_equal(vim.api.nvim_get_current_buf(), png_buf, ":split on the PNG created a duplicate virtual buffer")
+assert_custom_png_options(":split on the PNG")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, ":split on the PNG leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, ":split on the PNG leaked an unnamed buffer")
+set_custom_png_options()
 vim.cmd("Pico8OpenPng " .. vim.fn.fnameescape(png_fixture))
 assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8OpenPng on an open PNG created a duplicate virtual buffer")
+assert_custom_png_options("Pico8OpenPng on an open PNG")
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "Pico8OpenPng on an open PNG leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "Pico8OpenPng on an open PNG leaked an unnamed buffer")
 
@@ -543,6 +566,38 @@ assert_equal(
 )
 assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, "reopening after bdelete leaked a buffer")
 assert_equal(unnamed_buffers(), png_unnamed, "reopening after bdelete leaked an unnamed buffer")
+
+-- Loading a :bdelete'd virtual buffer with :buffer restores it -----------------
+
+vim.cmd("bdelete " .. png_buf)
+assert_equal(vim.api.nvim_buf_is_loaded(png_buf), false, "bdelete did not unload the virtual buffer")
+vim.cmd("buffer " .. png_buf)
+assert_equal(vim.api.nvim_get_current_buf(), png_buf, ":buffer did not load the virtual buffer")
+assert_equal(vim.bo[png_buf].buftype, "nofile", ":buffer left the virtual buffer as a normal buffer")
+assert_equal(vim.bo[png_buf].filetype, "pico8", ":buffer lost the virtual buffer filetype")
+assert_equal(vim.bo[png_buf].modifiable, false, ":buffer left the virtual buffer modifiable")
+assert_equal(vim.bo[png_buf].buflisted, true, ":buffer left the virtual buffer unlisted")
+assert_equal(vim.bo[png_buf].swapfile, false, ":buffer enabled swap for the virtual buffer")
+assert_equal(vim.b[png_buf].pico8_virtual_cart, true, ":buffer lost the virtual marker")
+assert_equal(
+  vim.bo[png_buf].path,
+  includes.path_value(vim.fs.dirname(png_fixture)),
+  ":buffer lost the scoped path"
+)
+vim.cmd("Pico8ReloadPng")
+if not vim.wait(10000, function()
+  return #clients(png_buf) > 0
+end, 50) then
+  fail("Pico8ReloadPng after :buffer did not attach a client")
+end
+if #vim.api.nvim_buf_get_lines(png_buf, 0, -1, false) < 2 then
+  fail("Pico8ReloadPng after :buffer did not restore the cart text")
+end
+assert_equal(vim.api.nvim_get_current_buf(), png_buf, "Pico8ReloadPng after :buffer changed buffers")
+assert_equal(vim.bo[png_buf].buftype, "nofile", "Pico8ReloadPng after :buffer lost nofile")
+assert_equal(vim.bo[png_buf].modifiable, false, "Pico8ReloadPng after :buffer made the buffer modifiable")
+assert_equal(#vim.api.nvim_list_bufs(), png_buffer_count, ":buffer + reload leaked a buffer")
+assert_equal(unnamed_buffers(), png_unnamed, ":buffer + reload leaked an unnamed buffer")
 
 -- Invalid PNGs leave an empty named scratch buffer -----------------------------
 

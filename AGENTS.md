@@ -39,10 +39,12 @@
   `includeexpr` prefers the full target on the cursor's include line so spaces,
   literal `.lua:2` names, and selector digits survive `gf` tokenization. An
   enabled `setup` installs a `*.p8.png` `BufReadCmd`, auto-opens through
-  `pico8/decodeCart`, reuses an existing virtual buffer on reopen, restores it
-  after `:bdelete`, deletes the source buffer on success, and leaves a named
-  empty read-only `nofile` buffer on failure. Decoded PNG virtual buffers carry
-  `b:pico8_cart_root` and a scoped `path`. Tests are in `tests/includes.lua`.
+  `pico8/decodeCart`, reuses an existing virtual buffer on reopen, preserves
+  custom include/expression/path values, restores state after `:bdelete` or a
+  direct `:buffer` load, and reattaches on reload. It deletes the source buffer
+  on success and leaves a named empty read-only `nofile` buffer on failure.
+  Decoded PNG virtual buffers carry `b:pico8_cart_root` and a scoped `path`.
+  Tests are in `tests/includes.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

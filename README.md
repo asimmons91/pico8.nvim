@@ -223,7 +223,9 @@ decode or client-start failure, the buffer becomes an empty, read-only
 `:Pico8OpenPng` offers file completion, and `:Pico8ReloadPng` re-decodes the
 current virtual cart after the PNG changes. Reopening the same PNG with `:edit`,
 `:split`, or `:Pico8OpenPng` reuses the existing virtual buffer instead of
-creating a duplicate. Auto-open is installed only by
+creating a duplicate and preserves buffer-local include/expression/path values.
+A `:bdelete`d virtual cart is restored when it is loaded again or reloaded with
+`:Pico8ReloadPng`. Auto-open is installed only by
 `require("pico_lsp").setup()` when the helper is not disabled; a fresh
 `setup({ disable = true })` installs no PNG autocmd. The shipped
 `lsp/pico_lsp.lua` config alone does not auto-open PNGs.

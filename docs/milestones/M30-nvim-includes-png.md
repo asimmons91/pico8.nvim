@@ -163,9 +163,12 @@ When `require("pico_lsp").setup()` enables the helper:
   buffers.
 - Reuse the existing virtual buffer when the same PNG is opened again with
   `:edit`, `:split`, or `:Pico8OpenPng`; update its text and version instead of
-  creating a duplicate. Reapply all virtual buffer options if `:bdelete`
-  reset them. If a new virtual buffer cannot be named, delete it rather than
-  leaking an unnamed buffer.
+  creating a duplicate, and preserve buffer-local include/expression/path
+  values. Reapply all virtual buffer options if `:bdelete` reset them, and
+  restore a tracked virtual buffer when it is loaded directly with `:buffer`.
+  `:Pico8ReloadPng` goes through the same open path so it restores state and
+  reattaches the client. If a new virtual buffer cannot be named, delete it
+  rather than leaking an unnamed buffer.
 - A second `BufReadCmd` must not fire for the `pico8-cart:` virtual buffer.
 
 ### 5. Command completion
@@ -241,16 +244,18 @@ When `require("pico_lsp").setup()` enables the helper:
   - a missing target reports an error and creates no file;
   - the include options and cart-scoped `path` are restored when the filetype
     changes, and a custom `path` is preserved;
-  - `:saveas` and `:file` update the scoped `path`, and `gf` follows the new
-    directory;
+  - `:saveas` and `:file` update the scoped `path`, follow the new directory
+    for `gf`, and leave a custom `path` alone;
   - cart directories containing semicolons and glob characters do not redirect
     `gf` to a sibling or parent file;
   - `nvim cart.p8.png` auto-opens a read-only `pico8-cart:` buffer with an
     attached client;
-  - reopening or splitting the same PNG reuses the virtual buffer and leaks no
-    unnamed buffer;
+  - reopening or splitting the same PNG reuses the virtual buffer, preserves
+    custom include/expression/path values, and leaks no unnamed buffer;
   - reopening after `:bdelete` restores the virtual buffer options and scoped
     path;
+  - `:bdelete` followed by `:buffer` restores virtual options, and
+    `:Pico8ReloadPng` refreshes the text and client;
   - an invalid `.p8.png` and a client-start failure produce an error, no
     `pico8-cart:` virtual buffer, no binary line content, and no
     `M.png_buffers` entry;
@@ -284,13 +289,15 @@ When `require("pico_lsp").setup()` enables the helper:
   the cart, working-directory decoys, literal `.lua:2` names, missing targets
   that create no file, option undo and user overrides, virtual-buffer root
   resolution, direct `.p8.png` auto-open, source-buffer deletion, reopening and
-  splitting an existing PNG, reopening after `:bdelete`, `:saveas`/`:file`
-  path updates, cart directories with spaces, semicolons, and glob characters,
-  a `../` include resolved from a working directory that does not contain its
-  target, reload, command completion, invalid PNGs, client-start failure, the
-  post-decode attach failure path, and the disabled-helper path. It passed on
-  Neovim 0.11.4 and 0.12.5 against a pico-lsp development build, and the full
-  suite passes in CI on Neovim 0.11 and 0.12.
+  splitting an existing PNG, custom include/expression/path preservation on
+  reopen, reopening after `:bdelete`, `:bdelete` + `:buffer` + reload,
+  `:saveas`/`:file` path updates, a custom path surviving `:file`, cart
+  directories with spaces, semicolons, and glob characters, a `../` include
+  resolved from a working directory that does not contain its target, reload,
+  command completion, invalid PNGs, client-start failure, the post-decode
+  attach failure path, and the disabled-helper path. It passed on Neovim
+  0.11.4 and 0.12.5 against a pico-lsp development build, and the full suite
+  passes in CI on Neovim 0.11 and 0.12.
 - The existing config, helper, correctness, include-buffer, features, cart, and
   fallback suites pass on the same setup.
 - Confirmed choices: `include` is buffer-local when empty, so a global value is
@@ -302,8 +309,9 @@ When `require("pico_lsp").setup()` enables the helper:
   to `v:fname`. A failed auto-open leaves the named source buffer as an empty
   read-only `nofile` buffer. Decoded PNG virtual buffers carry
   `b:pico8_cart_root` and a scoped `path` for include navigation. Reopening a
-  PNG reuses its virtual buffer, restores virtual options after `:bdelete`, and
-  the scoped path follows `:saveas`/`:file` renames.
+  PNG reuses its virtual buffer, preserves custom include/expression/path
+  values, restores virtual options after `:bdelete` or a direct `:buffer` load,
+  and the scoped path follows `:saveas`/`:file` renames.
 - Known behavior: Neovim's `gf` strips a trailing `:2` before calling
   `includeexpr`; the resolver recovers the original target from the include
   line. Vim also tries its unmodified-name lookup before `includeexpr`, so a
@@ -320,6 +328,8 @@ When `require("pico_lsp").setup()` enables the helper:
 |---|---|
 | `includeexpr` parsing differs from the server's include rules | Reuse the same quote/tab-suffix rules and add fixtures for both forms. |
 | Auto-open leaves an empty or duplicate buffer | Delete the source buffer only after a successful virtual-buffer attach; reuse an existing virtual buffer and test both paths. |
+| Reopening a PNG resets user buffer-local options | Set `filetype` only when it differs; preserve custom include/expression/path values; test reopen variants. |
+| A `:bdelete`d virtual cart is loaded in a half-initialized state | Restore virtual state on `BufEnter` and route reload through the open path; test `:buffer` + reload. |
 | `gf` resolves relative to the wrong directory | Scope `path` to the cart and resolve against it, not `getcwd()`; test from a different working directory with decoys. |
 | Renaming or saving a cart leaves a stale scoped path | Track the scoped value and update it on `BufFilePost`; test `:saveas` and `:file`. |
 | Path metacharacters turn the scoped entry into a glob or upward search | Escape separators and use an `includeexpr` sentinel for glob/environment characters; test `;` and `[`. |

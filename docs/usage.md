@@ -175,8 +175,10 @@ The command and replacement forms are also available:
 `pico8-cart:` virtual buffer, marks it `nomodifiable`, and attaches the
 `pico_lsp` client. The original PNG buffer is deleted after a successful
 auto-open. Reopening the same PNG with `:edit`, `:split`, or `:Pico8OpenPng`
-reuses the existing virtual buffer. `:Pico8ReloadPng` re-decodes the current
-virtual cart after the PNG file changes.
+reuses the existing virtual buffer and preserves buffer-local
+include/expression/path values. A `:bdelete`d virtual cart is restored when it
+is loaded again or reloaded with `:Pico8ReloadPng`. `:Pico8ReloadPng`
+re-decodes the current virtual cart after the PNG file changes.
 
 If decoding or client startup fails, the source buffer becomes an empty,
 read-only `nofile` buffer with its name intact; raw binary data is never

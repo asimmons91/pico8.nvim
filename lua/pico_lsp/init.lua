@@ -564,19 +564,46 @@ local function set_virtual_text(buf, text)
   vim.bo[buf].modified = false
 end
 
--- Apply every option a decoded cart needs. This also restores a buffer after
--- :bdelete reset its buffer-local state.
-local function apply_virtual_options(buf, result, root_dir)
+-- Apply the non-text virtual buffer state. Setting 'filetype' only when it is
+-- missing (or its ftplugin did not run) avoids re-running the ftplugin and its
+-- undo on a healthy buffer, which would discard user buffer-local
+-- include/expr/path values.
+local function apply_virtual_state(buf, root_dir, force_path)
   vim.b[buf].pico8_virtual_cart = true
   vim.b[buf].pico8_cart_root = root_dir
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].swapfile = false
   vim.bo[buf].buflisted = true
-  vim.bo[buf].filetype = "pico8"
+  if vim.bo[buf].filetype ~= "pico8" or not vim.b[buf].did_ftplugin then
+    vim.bo[buf].filetype = "pico8"
+  end
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].modified = false
+  if force_path then
+    vim.bo[buf].path = includes.path_value(root_dir)
+    vim.b[buf].pico8_path_scoped = true
+    vim.b[buf].pico8_path_value = vim.bo[buf].path
+  end
+end
+
+local function is_virtual_state(buf)
+  return vim.b[buf].pico8_virtual_cart == true and vim.bo[buf].buftype == "nofile"
+end
+
+local function apply_virtual_options(buf, result, root_dir)
+  apply_virtual_state(buf, root_dir, false)
   set_virtual_text(buf, result.text)
   vim.bo[buf].modifiable = false
   vim.bo[buf].modified = false
+end
+
+local function restore_virtual_state(buf, info)
+  local ok, source = pcall(vim.uri_to_fname, info.source)
+  if not ok or type(source) ~= "string" or source == "" then
+    return
+  end
+  apply_virtual_state(buf, vim.fs.dirname(normalize(source)), true)
 end
 
 local function open_virtual(result, root_dir)
@@ -677,7 +704,13 @@ function M.open_png(path)
   local created = false
   local buf = existing
   if buf then
+    local stale = not is_virtual_state(buf)
     apply_virtual_options(buf, result, root_dir)
+    if stale then
+      vim.bo[buf].path = includes.path_value(root_dir)
+      vim.b[buf].pico8_path_scoped = true
+      vim.b[buf].pico8_path_value = vim.bo[buf].path
+    end
     vim.api.nvim_set_current_buf(buf)
   else
     local create_err
@@ -902,25 +935,12 @@ function M.reload_png()
     notify("current buffer is not a decoded .p8.png cart")
     return
   end
-  local path = vim.uri_to_fname(info.source)
-  local result, err = decode_png(path)
-  if err then
-    notify(err, vim.log.levels.ERROR)
+  local ok, path = pcall(vim.uri_to_fname, info.source)
+  if not ok or type(path) ~= "string" or path == "" then
+    notify("could not resolve the source .p8.png path", vim.log.levels.ERROR)
     return
   end
-  set_virtual_text(buf, result.text)
-  info.version = info.version + 1
-  vim.lsp.buf_notify(buf, "textDocument/didOpen", {
-    textDocument = {
-      uri = info.virtual,
-      languageId = "pico8",
-      version = info.version,
-      text = result.text,
-    },
-  })
-  if vim.api.nvim_buf_is_loaded(buf) then
-    cart_module.refresh_cart_info(buf)
-  end
+  M.open_png(path)
 end
 
 local function is_cart_buffer(bufnr)
@@ -1481,6 +1501,18 @@ function M.setup(opts)
     pattern = "*.lua",
     callback = function(args)
       safe_attach(args.buf)
+    end,
+  })
+  -- A tracked virtual cart can be loaded directly with :buffer after
+  -- :bdelete. Restore its virtual state before any reload command runs.
+  vim.api.nvim_create_autocmd("BufEnter", {
+    group = M.group,
+    callback = function(args)
+      local info = M.png_buffers[args.buf]
+      if not info or is_virtual_state(args.buf) then
+        return
+      end
+      restore_virtual_state(args.buf, info)
     end,
   })
   vim.api.nvim_create_autocmd("BufWritePost", {
