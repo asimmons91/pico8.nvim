@@ -455,8 +455,8 @@ end
 -- :checkhealth opens its own buffer before running this module, so the current
 -- buffer is not the one the user was editing. A split or `g:health.style =
 -- 'float'` report shares the user's tab; a plain report opens a new tab. Prefer
--- a non-health window in the current tab, then the previous tab's active
--- window, then the alternate buffer.
+-- a usable non-health window in the current tab, then one in the previous tab,
+-- then the alternate buffer.
 local function context_bufnr()
   local current = vim.api.nvim_get_current_buf()
   if not is_health_buffer(current) then
