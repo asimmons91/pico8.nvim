@@ -1,8 +1,10 @@
 # M36 — End-User Onboarding, Documentation, and Release Readiness
 
 **Status:** Done — onboarding docs, demo cart, support files, documentation
-checks, and the v0.1.0 release path are complete. Mason packaging and LazyVim
-extra publication are explicitly out of scope and remain M35.
+checks, and the v0.1.0 release are complete. The only unrun check is a manual
+PICO-8 runtime load; the demo is parsed by `pico-lsp` and the release checklist
+records the gap. Mason packaging and LazyVim extra publication are explicitly
+out of scope and remain M35.
 
 **Depends on:** M25–M34; a released `pico-lsp` binary (v1.8.1 or later). This
 milestone supplies the Neovim side of
