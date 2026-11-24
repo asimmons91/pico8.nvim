@@ -206,42 +206,80 @@ Type `p8_left` in code or a string and accept completion to insert `⬅️`. The
 `p8-` form is accepted for `pico8-ls` compatibility. Control entries such as
 `p8_font_custom` (`\14`) are offered only inside strings.
 
-The helper adds a picker:
+The helper adds a picker and direct insertion:
 
 ```vim
-:Pico8InsertGlyph
+:Pico8InsertGlyph            " unfiltered picker
+:Pico8InsertGlyph left       " exact name
+:Pico8InsertGlyph 139        " decimal P8SCII byte
+:Pico8InsertGlyph 0x8b       " hex P8SCII byte
+:Pico8InsertGlyph butt       " picker filtered by the search term
 ```
 
-Pass a name to insert directly:
+An exact name or byte inserts immediately. Any other term opens the picker
+filtered by a case-insensitive substring across the glyph name, description,
+`0x` byte, and decimal byte. A term with no matches reports that result instead
+of showing an empty picker. Byte values outside `0..255`, including `256`,
+`-1`, and `0x100`, are rejected before any server request.
 
-```vim
-:Pico8InsertGlyph left
-```
+Command-line completion lists the cached canonical glyph names, sorted by name.
+It includes custom names, deduplicates case-insensitively, and never starts a
+request; if the cache is empty, run the command once or enable the Shift maps to
+prefetch it.
+
+Control entries remain context-restricted. The server rejects insertion outside
+Lua code, in an `#include` path, or for a string-only control glyph outside a
+string, and the client shows the server's error. Cancelling the picker is a
+no-op.
 
 Custom font slots are declared in `pico8.glyphs`; see the
 [pico-lsp configuration reference](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md#p8scii-glyph-snippets).
 The server inserts the canonical Unicode spelling for the chosen byte because
-it cannot inspect custom font pixels.
+it cannot inspect custom font pixels. A custom entry uses its configured name
+and overrides a built-in entry that shares the same byte.
 
-Byte insertion, search filtering, and catalog caching are proposed in M31.
+### Catalog cache and prefetch
+
+The client caches the full `pico8/glyphs` catalog per `pico_lsp` client and
+cart root. When glyph maps are enabled it prefetches asynchronously after
+attach, so the first Shift press normally does not wait for the server. A cold
+cache makes one bounded synchronous request (750 ms) and then falls back to the
+literal uppercase key. A failed request warns once per client; later presses
+use the literal key without repeating the request. A later explicit prefetch,
+such as reinstalling the maps, can retry.
+
+The picker asks for a position-filtered catalog so string-only control entries
+are not offered outside a string. That filtered response never replaces the
+full cache used by the Shift mappings. Included `.lua` buffers can use
+`:Pico8InsertGlyph`, but they do not receive Shift maps.
+
+Changing `pico8.glyphs` requires a client restart, which clears the cache and
+fetches the new catalog. Prefetch failures are silent unless a later insertion
+needs the catalog.
 
 ### PICO-8 Shift shortcuts
 
 The optional ftplugin installs PICO-8's `Shift-A` through `Shift-Z` insert-mode
-glyph shortcuts. Enable them before opening a cart:
+glyph shortcuts. Enable them before opening a cart with either:
+
+```lua
+require("pico_lsp").setup({ glyph_maps = true })
+```
 
 ```lua
 vim.g.pico8_glyph_maps = 1
 ```
 
-In Lua code sections (but not `#include` paths), the mappings fetch the
-canonical glyph text from the server's `pico8/glyphs` catalog by byte. Outside
-Lua code, in include paths, without a client, or for a byte with no catalog
-entry, the key inserts the literal uppercase letter. Use `CTRL-V u<hex>` to
-insert a literal uppercase letter in code, for example `CTRL-V u0055` for `U`.
+In Lua code sections (but not `#include` paths), the mappings read the cached
+canonical glyph text from the `pico8/glyphs` catalog by byte. Outside Lua code,
+in include paths, without a client, for a byte with no catalog entry, or after
+a failed catalog request, the key inserts the literal uppercase letter. Use
+`CTRL-V u<hex>` to insert a literal uppercase letter in code, for example
+`CTRL-V u0055` for `U`.
 
 The maps are buffer-local to `pico8` buffers; included `.lua` files do not
-receive them. Read-only `.p8.png` buffers do not accept insertions.
+receive them. Read-only `.p8.png` buffers do not accept insertions and do not
+prefetch the catalog.
 
 The remaining printable P8SCII characters are available through `p8_`
 completion or `:Pico8InsertGlyph`. PICO-8's `CTRL-J` (Hiragana), `CTRL-K`
@@ -363,7 +401,7 @@ buffer it jumps inside the virtual buffer.
 |---|---|
 | `:Pico8OpenPng [path]` | Available |
 | `:Pico8ReloadPng` | Available |
-| `:Pico8InsertGlyph [name]` | Available |
+| `:Pico8InsertGlyph [name\|byte\|search]` | Available |
 | `:Pico8Refresh` | Available |
 | `:Pico8ToggleInlayHints` | Available |
 | `:Pico8CartInfo`, `:Pico8Tabs` | Available |

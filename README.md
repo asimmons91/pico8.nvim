@@ -6,15 +6,16 @@ detection, LSP setup, cart-owned `.lua` attachment, `pico8/cartInfo` status
 helpers, a P8SCII glyph picker, read-only `.p8.png` opening, and a home for the
 Neovim-specific milestones inherited from the server repository.
 
-**Status:** M30 is complete. The plugin ships native LSP configuration,
+**Status:** M31 is complete. The plugin ships native LSP configuration,
 cart-aware roots, one-call activation, a buffer-aware cart-owned `.lua` helper
 with managed attachment and `:Pico8Refresh`, client-side enabling for the cart
 budget code lens and inlay hints, a cached cart budget statusline with
 `:Pico8CartInfo` and `:Pico8Tabs`, PICO-8 comment settings, cart variables,
 and `:Pico8OpenCart` for included `.lua` buffers, `gf` navigation for
-`#include` targets, and direct `nvim cart.p8.png` decoding. M31, M32, and M34
-are proposed; M33 (range formatting, document links, and code-lens refresh)
-remains server work in `pico-lsp`.
+`#include` targets, direct `nvim cart.p8.png` decoding, and cached P8SCII glyph
+input with byte forms and a filtered picker. M32 and M34 are proposed; M33
+(range formatting, document links, and code-lens refresh) remains server work
+in `pico-lsp`.
 
 ## Requirements
 
@@ -125,7 +126,8 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
   for `pico8` buffers. `pico8.limits.codeLens` and `pico8.inlayHints` on the
   server decide what appears; the latter defaults to off.
 - PICO-8 comments, syntax highlighting, and the optional `Shift-A`–`Shift-Z`
-  glyph maps work for `.p8` carts.
+  glyph maps work for `.p8` carts. Glyph maps prefetch and cache the server
+  catalog, so only the first insertion can wait on a request.
 - Cart-owned `.lua` files stay `lua` buffers but use PICO-8's comment leaders,
   expose their owning cart through buffer variables, and can open it with
   `:Pico8OpenCart`.
@@ -134,7 +136,9 @@ Verify it with `pico-lsp --version`. A Mason package is planned.
   selector is stripped for `gf`).
 - Read-only `.p8.png` carts open directly with `nvim cart.p8.png`, and through
   `:Pico8OpenPng` and `:Pico8ReloadPng`.
-- The P8SCII glyph picker is available through `:Pico8InsertGlyph`.
+- `:Pico8InsertGlyph` inserts a glyph by name, decimal byte, or `0x` byte; a
+  search term opens a filtered picker, and command-line completion lists cached
+  names.
 - `pico8/cartInfo` is cached asynchronously and powers a statusline API,
   `:Pico8CartInfo`, and `:Pico8Tabs`. Root carts, cart-owned includes, and
   decoded `.p8.png` virtual buffers all show their owning cart's budget.
@@ -354,7 +358,7 @@ vim.o.statusline = "%f %m %{%v:lua.Pico8CartStatus()%} %= %l:%c"
 |---|---|
 | `:Pico8OpenPng [path]` | Decode a `.p8.png` cart into a read-only virtual buffer; offers file completion. |
 | `:Pico8ReloadPng` | Re-decode the current virtual `.p8.png` cart. |
-| `:Pico8InsertGlyph [name]` | Insert a P8SCII glyph or open the picker. |
+| `:Pico8InsertGlyph [name\|byte\|search]` | Insert a glyph by name or byte, or open a filtered picker; completes cached names. |
 | `:Pico8Refresh` | Clear the include cache and rescan loaded buffers. |
 | `:Pico8ToggleInlayHints` | Toggle client-side inlay hints for the current buffer. |
 | `:Pico8CartInfo` | Show the cart budget with per-file and per-include detail. |
@@ -368,6 +372,12 @@ summary plus compact file detail. `:Pico8Tabs` fetches fresh tab lines, opens
 buffer it names the owning cart and does not switch buffers; on a decoded
 `.p8.png` buffer it jumps inside the virtual buffer.
 
+`:Pico8InsertGlyph left` inserts by name, `:Pico8InsertGlyph 139` and
+`:Pico8InsertGlyph 0x8b` insert by byte, and any other term opens the picker
+filtered by name, description, or byte spelling. Command-line completion lists
+cached canonical names without making a request. See
+[usage](docs/usage.md#p8scii-glyph-input).
+
 ## Configuration
 
 ```lua
@@ -377,6 +387,7 @@ require("pico_lsp").setup({
   disable = false,            -- disable the helper and LSP setup
   codelens = true,            -- client-side budget lens display
   inlay_hints = true,         -- client-side inlay-hint display
+  glyph_maps = false,         -- install Shift-A..Z P8SCII glyph maps
   settings = {                -- optional pico8 server settings
     pico8 = { typeChecking = "basic" },
   },
@@ -414,7 +425,8 @@ PICO_LSP_BIN=/path/to/pico-lsp tests/run.sh
 The tests create temporary carts and exercise config resolution, command-line
 overrides, cart and include roots, attachment without a shipped config, unsaved
 includes, managed detach, multiple carts, PNG opening and auto-open, glyph
-insertion, cached cart info and statusline text, include and PNG cart
+cache and prefetch behavior, byte insertion, filtered picker and completion,
+cached cart info and statusline text, include and PNG cart
 resolution, `gf` include navigation, refresh debouncing and coalescing,
 included-buffer comment settings and variables, `:Pico8OpenCart`, the cart
 commands, and fallback behavior. The CI workflow checks out the server and

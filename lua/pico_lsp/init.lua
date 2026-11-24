@@ -10,6 +10,7 @@
 local M = {}
 
 local cart_module = require("pico_lsp.cart")
+local glyphs = require("pico_lsp.glyphs")
 local includes = require("pico_lsp.includes")
 
 M.png_buffers = {}
@@ -19,7 +20,6 @@ M.cart_status = cart_module.cart_status
 M.refresh_cart_info = cart_module.refresh_cart_info
 
 local warned_missing_binary = false
-local warned_glyph_maps = false
 
 -- Cart edits are coalesced for this long before the helper rescans includes.
 local RESCAN_DEBOUNCE_MS = 300
@@ -385,6 +385,32 @@ local function enable_client_features(lsp_client, bufnr)
   if ok and client and type(client.attach) == "function" then
     pcall(client.attach, lsp_client, bufnr)
   end
+  local glyph_ok, glyph_module = pcall(require, "pico_lsp.glyphs")
+  if glyph_ok and glyph_module and type(glyph_module.attach) == "function" then
+    pcall(glyph_module.attach, lsp_client, bufnr)
+  end
+end
+
+-- Make the configured `pico8` settings available during initialize, before the
+-- server's asynchronous `workspace/configuration` pull completes. Attach-time
+-- requests such as the glyph prefetch would otherwise use server defaults.
+local function before_init(params, config)
+  local settings = config.settings
+  local pico8 = type(settings) == "table" and settings.pico8 or nil
+  if type(pico8) ~= "table" then
+    return
+  end
+  local options = params.initializationOptions
+  if type(options) ~= "table" then
+    if options ~= nil and options ~= vim.NIL then
+      return
+    end
+    options = {}
+  end
+  if options.pico8 == nil or options.pico8 == vim.NIL then
+    options.pico8 = pico8
+  end
+  params.initializationOptions = options
 end
 
 -- Minimal config for helper-only installs without `lsp/pico_lsp.lua`. It also
@@ -404,6 +430,7 @@ local function fallback_config()
     on_attach = function(lsp_client, bufnr)
       enable_client_features(lsp_client, bufnr)
     end,
+    before_init = before_init,
   }
 end
 
@@ -821,71 +848,80 @@ local function auto_open_png(args)
   scratch_png_buffer(args.buf)
 end
 
-local function glyph_label(item)
-  local byte = item.byte ~= nil and string.format("0x%02x", item.byte) or ""
-  return string.format("%s  p8_%s  %s", item.text or "", item.name or "", item.description or byte)
-end
-
-function M.insert_glyph(name)
+function M.insert_glyph(argument)
   if M.disabled then
     notify("helper is disabled", vim.log.levels.INFO)
     return
   end
-  local bufnr = vim.api.nvim_get_current_buf()
-  local client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })[1]
-  if not client then
-    notify("no pico_lsp client attached to this buffer")
-    return
-  end
+  glyphs.insert(argument)
+end
 
-  local position = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  if not name or name == "" then
-    local response = client:request_sync("pico8/glyphs", {
-      textDocument = position.textDocument,
-      position = position.position,
-    }, 2000, bufnr)
-    if not response or response.err or not response.result then
-      notify("could not load P8SCII glyphs", vim.log.levels.ERROR)
-      return
-    end
-    vim.ui.select(response.result.glyphs, {
-      prompt = "P8SCII glyph",
-      format_item = glyph_label,
-    }, function(item)
-      if item then
-        M.insert_glyph(item.name)
-      end
-    end)
-    return
+-- `glyph_maps = true` installs the maps through the ftplugin. The global is
+-- kept for base-config users and older configurations.
+function M.glyph_maps_enabled(bufnr)
+  if bufnr == nil or bufnr == 0 then
+    bufnr = vim.api.nvim_get_current_buf()
   end
-
-  local response = client:request_sync("workspace/executeCommand", {
-    command = "pico8.insertGlyph",
-    arguments = {
-      {
-        textDocument = position.textDocument,
-        position = position.position,
-        name = name,
-      },
-    },
-  }, 3000, bufnr)
-  if not response or response.err then
-    notify("could not insert P8SCII glyph", vim.log.levels.ERROR)
-    return
+  if vim.g.pico8_glyph_maps and vim.g.pico8_glyph_maps ~= 0 then
+    return true
   end
-  if response.result and response.result.edit then
-    vim.lsp.util.apply_workspace_edit(response.result.edit, client.offset_encoding)
+  if M.opts and M.opts.glyph_maps == true then
+    return true
   end
+  local marker = vim.b[bufnr].pico8_glyph_maps
+  return marker == true or marker == 1
 end
 
 -- PICO-8 assigns the 26 typeable symbols at P8SCII 0x80-0x99 to Shift-A..Z
--- in alphabetical order. The glyph text comes from the server catalog, so
--- custom pico8.glyphs entries and canonical Unicode spellings stay server-owned.
+-- in alphabetical order. The glyph text comes from the cached server catalog,
+-- so custom pico8.glyphs entries and canonical Unicode spellings stay
+-- server-owned and Shift presses do not request the catalog every time.
 local shift_glyph_first_byte = 0x80
 local shift_glyph_count = 26
 
-local function glyph_text(byte, key)
-  local bufnr = vim.api.nvim_get_current_buf()
+-- The cached catalog is position-independent, so the mapping keeps the
+-- server's code-only behavior locally: only the __lua__ section is code, and
+-- #include directives are never glyph targets. Buffers without cart sections
+-- (for example a manually mapped Lua buffer) are treated as code.
+local function in_code_context(bufnr)
+  local win = vim.fn.bufwinid(bufnr)
+  if win == -1 then
+    win = 0
+  end
+  local lnum = vim.api.nvim_win_get_cursor(win)[1]
+  local ok, lines = pcall(vim.api.nvim_buf_get_lines, bufnr, 0, -1, false)
+  if not ok then
+    return false
+  end
+  local line = lines[lnum] or ""
+  if line:match("^%s*#include%s") or line:match("^%s*#include$") then
+    return false
+  end
+
+  local current_section = nil
+  local saw_section = false
+  for i, text in ipairs(lines) do
+    local section = text:match("^%s*__([%a_]+)__%s*$")
+    if section then
+      saw_section = true
+      if i == lnum then
+        return false
+      end
+      if i < lnum then
+        current_section = section
+      end
+    end
+  end
+  if not saw_section then
+    return true
+  end
+  return current_section == "lua"
+end
+
+local function glyph_text(bufnr, byte, key)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return key
+  end
   if not vim.bo[bufnr].modifiable then
     return ""
   end
@@ -893,37 +929,12 @@ local function glyph_text(byte, key)
   if mode == "R" or mode == "r" then
     return key
   end
-
-  local client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })[1]
-  if not client then
-    if not warned_glyph_maps then
-      warned_glyph_maps = true
-      notify("no pico_lsp client attached; PICO-8 Shift glyph maps fall back to uppercase letters")
-    end
+  if not in_code_context(bufnr) then
     return key
   end
 
-  local position = vim.lsp.util.make_position_params(0, client.offset_encoding)
-  local response = client:request_sync("pico8/glyphs", {
-    textDocument = position.textDocument,
-    position = position.position,
-  }, 2000, bufnr)
-  if not response or response.err or not response.result then
-    if not warned_glyph_maps then
-      warned_glyph_maps = true
-      notify("could not load P8SCII glyphs; Shift glyph maps fall back to uppercase letters", vim.log.levels.ERROR)
-    end
-    return key
-  end
-
-  -- Later entries win so a custom definition can override a built-in byte.
-  local text = ""
-  for _, entry in ipairs(response.result.glyphs or {}) do
-    if entry.byte == byte then
-      text = entry.text or ""
-    end
-  end
-  if text == "" then
+  local text = glyphs.text_for_byte(bufnr, byte)
+  if not text or text == "" then
     return key
   end
   return text
@@ -934,11 +945,20 @@ function M.install_glyph_maps(bufnr)
   if bufnr == 0 then
     bufnr = vim.api.nvim_get_current_buf()
   end
+  vim.b[bufnr].pico8_glyph_maps = true
+
+  -- If a client is already attached, start the catalog fetch now. Attach-time
+  -- prefetch covers the usual order; the module coalesces in-flight requests.
+  local client = vim.lsp.get_clients({ name = "pico_lsp", bufnr = bufnr })[1]
+  if client then
+    glyphs.prefetch(client, bufnr)
+  end
+
   for i = 0, shift_glyph_count - 1 do
     local key = string.char(string.byte("A") + i)
     local byte = shift_glyph_first_byte + i
     vim.keymap.set("i", key, function()
-      return glyph_text(byte, key)
+      return glyph_text(bufnr, byte, key)
     end, {
       buffer = bufnr,
       expr = true,
@@ -1409,7 +1429,13 @@ local function define_commands(enabled)
   })
   vim.api.nvim_create_user_command("Pico8InsertGlyph", function(args)
     M.insert_glyph(args.args ~= "" and args.args or nil)
-  end, { nargs = "?" })
+  end, {
+    nargs = "?",
+    desc = "Insert a P8SCII glyph by name or byte, or open the filtered picker",
+    complete = function(arg_lead)
+      return glyphs.complete(arg_lead)
+    end,
+  })
   vim.api.nvim_create_user_command("Pico8OpenCart", M.open_cart, {
     nargs = 0,
     desc = "Open the PICO-8 cart that includes this buffer",
@@ -1420,6 +1446,9 @@ function M.setup(opts)
   opts = opts or {}
   M.opts = opts
   M.disabled = opts.disable == true or vim.g.pico_lsp_helper_disabled == 1
+  -- The catalog belongs to the current client/server settings. A re-setup is a
+  -- fresh configuration even when the helper stays enabled.
+  glyphs.reset()
 
   -- Configure the shared client-display options even when the helper is
   -- disabled: the shipped lsp/pico_lsp.lua still attaches and reads them.
@@ -1520,6 +1549,22 @@ function M.setup(opts)
       safe_attach(args.buf)
     end,
   })
+  -- Prefetch after every pico_lsp attachment, including user-configured
+  -- clients whose on_attach does not call the shipped hook.
+  vim.api.nvim_create_autocmd("LspAttach", {
+    group = M.group,
+    callback = function(args)
+      local data = args.data or {}
+      local client = data.client_id and vim.lsp.get_client_by_id(data.client_id)
+      if not client or client.name ~= "pico_lsp" then
+        return
+      end
+      local ok, err = pcall(glyphs.attach, client, args.buf)
+      if not ok then
+        log_debug("pico-lsp: glyph prefetch attach failed: " .. tostring(err))
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("BufEnter", {
     group = M.group,
     pattern = "*.lua",
@@ -1617,8 +1662,21 @@ function M.setup(opts)
       if bufnr then
         forget_marker(bufnr, data.client_id)
       end
+      glyphs.detach(data.client_id, bufnr)
     end,
   })
+
+  -- A setup that enables glyph maps after carts are already open installs the
+  -- mappings without waiting for another FileType event.
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if
+      vim.api.nvim_buf_is_loaded(bufnr)
+      and vim.bo[bufnr].filetype == "pico8"
+      and M.glyph_maps_enabled(bufnr)
+    then
+      M.install_glyph_maps(bufnr)
+    end
+  end
 
   attach_loaded_lua_buffers()
 end

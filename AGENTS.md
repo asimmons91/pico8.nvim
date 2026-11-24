@@ -10,7 +10,7 @@
   and syntax highlighting.
 - `require("pico_lsp").setup()` enables `vim.lsp.enable("pico_lsp")` by default.
   Set `lsp = false` to manage activation manually.
-- M25, M26, M27, M28, M29, and M30 are complete. M31, M32, and M34 are
+- M25, M26, M27, M28, M29, M30, and M31 are complete. M32 and M34 are
   proposed. M33 remains server-owned in `pico-lsp`. M35 (Mason and LazyVim
   extra) is proposed.
 - The M27 client module enables the budget code lens and inlay-hint display for
@@ -47,6 +47,13 @@
   and leaves a named empty read-only `nofile` buffer on failure. Decoded PNG
   virtual buffers carry `b:pico8_cart_root` and a scoped `path`. Tests are in
   `tests/includes.lua`.
+- The M31 glyph module caches the `pico8/glyphs` catalog per client and cart
+  root, prefetches after attach when maps are enabled, and makes at most one
+  bounded synchronous request on a cold cache. `:Pico8InsertGlyph` accepts
+  names, decimal bytes, `0x` bytes, and search terms; completion lists cached
+  canonical names, and the picker filters without replacing the full cache.
+  `setup({ glyph_maps = true })` installs the `.p8` Shift maps alongside the
+  existing `g:pico8_glyph_maps` switch. Tests are in `tests/glyphs.lua`.
 - The M26 helper reads loaded cart buffers for unsaved `#include` edits, caches
   parsed includes by changedtick or mtime/size, reuses only root-matched
   clients, tracks helper-managed attachments, revalidates ownership, and

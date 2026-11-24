@@ -172,11 +172,18 @@ above.
 ## Glyph insertion falls back to uppercase
 
 - The Shift maps need an attached `pico_lsp` client and the server glyph
-  catalog.
+  catalog. The catalog is prefetched when the maps are enabled and cached for
+  the client lifetime.
 - Outside Lua code, in include paths, in read-only buffers, or with no client,
   the mapping intentionally inserts a literal letter.
-- Use `:Pico8InsertGlyph` or `p8_` completion for the remaining glyphs.
-- Catalog caching is proposed in M31.
+- The first cold-cache insertion makes one bounded request. If it fails, the
+  client warns once and keeps using literal letters. Restart the client or
+  reinstall the maps to retry.
+- Use `:Pico8InsertGlyph` or `p8_` completion for the remaining glyphs. The
+  command accepts names, decimal bytes, and `0x` bytes; other terms open a
+  filtered picker.
+- Custom `pico8.glyphs` changes need a client restart because the catalog is
+  cached per client and cart root.
 
 ## Tree-sitter parser does not load
 
