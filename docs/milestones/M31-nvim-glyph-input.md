@@ -1,10 +1,11 @@
 # M31 — Neovim Glyph Input Polish
 
-**Status:** Proposed — not started.
+**Status:** Done — cached catalog, attach-time prefetch, byte forms, filtered
+picker, completion, tests, and documentation are complete.
 
 **Depends on:** pico-lsp M16 (glyph catalog and picker), M26 (helper correctness)
 
-**Release target:** Proposed for pico8.nvim v0.1.0; unscheduled.
+**Release target:** pico8.nvim v0.1.0; completed 2026-11-24.
 
 **Roadmap:** [ROADMAP.md](../ROADMAP.md)
 
@@ -42,6 +43,42 @@ descriptions. A custom `logo` entry at byte `128` still wins over the built-in
 | D9 | Replace mode | Preserve the existing replace-mode and non-modifiable-buffer fallbacks. |
 | D10 | Scope | `.p8` buffers only; included `.lua` buffers do not receive glyph maps. |
 
+### Resolved decisions
+
+- **D1/D4:** `lua/pico_lsp/glyphs.lua` owns the cache, keyed by client ID and
+  normalized cart root. It stores server-order entries plus `by_byte` and
+  case-insensitive `names`. The cache clears on `LspDetach`, helper re-setup,
+  and a module reload. The glyph module installs its own detach cleanup so
+  base-config users get the same invalidation.
+- **D2:** Attach-time prefetch sends one asynchronous, position-independent
+  `pico8/glyphs` request. `install_glyph_maps` also asks for a prefetch when a
+  client is already attached; in-flight and filled caches coalesce. Read-only
+  `.p8.png` virtual buffers never prefetch.
+- **D2/settings:** The shipped and fallback configs mirror `settings.pico8`
+  into `initializationOptions.pico8` when no explicit `init_options.pico8` is
+  set. This prevents the attach-time prefetch from caching server defaults
+  while the asynchronous `workspace/configuration` pull is still in flight.
+- **D3:** The synchronous fallback timeout is 750 ms. It warns once per cache,
+  returns the literal key, and does not retry until an explicit prefetch.
+- **D4/activation:** `require("pico_lsp").setup({ glyph_maps = true })` installs
+  the maps through the ftplugin and enables prefetch. The existing
+  `vim.g.pico8_glyph_maps = 1` switch remains supported.
+- **D5:** Numeric-looking out-of-range values error instead of becoming search
+  terms. Exact names resolve against the full catalog first, so control entries
+  receive the server's context error instead of opening the picker. A cold
+  command cache makes one bounded full-catalog request before the picker's
+  position request.
+- **D6:** Completion lists canonical cached names only, deduplicated
+  case-insensitively and sorted case-insensitively. It never starts a request.
+- **D7:** The picker keeps `vim.ui.select`. The position-filtered response is
+  local to the picker and never replaces the full catalog.
+- **D8/D10:** `:Pico8InsertGlyph` remains available on included `.lua` buffers;
+  only the Shift maps are `.p8`-only. The cached Shift mapping preserves the old
+  context fallback locally by allowing only the `__lua__` section and rejecting
+  `#include` lines.
+- **D9:** Replace mode and non-modifiable buffers return before any cache or
+  request work, preserving the existing behavior.
+
 ## Scope
 
 ### In scope
@@ -68,11 +105,15 @@ descriptions. A custom `logo` entry at byte `128` still wins over the built-in
 
 ## Deliverables
 
-1. `lua/pico_lsp/glyphs.lua` or equivalent cache module.
-2. `lua/pico_lsp/init.lua` — command parsing, completion, and
-   prefetch wiring.
-3. `tests/helper.lua` or a focused glyph test.
-4. `README.md` — new argument forms and filtering.
+1. `lua/pico_lsp/glyphs.lua` — catalog cache, prefetch, insertion, picker,
+   and completion.
+2. `lua/pico_lsp/init.lua` — command parsing, completion, prefetch wiring, and
+   `glyph_maps` activation.
+3. `tests/glyphs.lua` — focused headless cache, insertion, picker, completion,
+   and fallback tests.
+4. `README.md`, `docs/usage.md`, `docs/configuration.md`, and
+   `docs/troubleshooting.md` — new argument forms, filtering, cache, and
+   restart behavior.
 5. `docs/ROADMAP.md` — milestone status.
 
 ## Detailed requirements
@@ -249,15 +290,15 @@ Requirements:
 
 ## Exit criteria
 
-- [ ] Glyph maps use the cached catalog and do not request on every keypress.
-- [ ] Prefetch runs asynchronously after attach when maps are enabled.
-- [ ] Failed lookups still fall back to literal uppercase letters.
-- [ ] `:Pico8InsertGlyph` accepts names, decimal bytes, and `0x` bytes.
-- [ ] A search term filters the picker.
-- [ ] Command completion lists cached names without a request.
-- [ ] Custom glyph overrides, context rules, and replace-mode behavior are
+- [x] Glyph maps use the cached catalog and do not request on every keypress.
+- [x] Prefetch runs asynchronously after attach when maps are enabled.
+- [x] Failed lookups still fall back to literal uppercase letters.
+- [x] `:Pico8InsertGlyph` accepts names, decimal bytes, and `0x` bytes.
+- [x] A search term filters the picker.
+- [x] Command completion lists cached names without a request.
+- [x] Custom glyph overrides, context rules, and replace-mode behavior are
       preserved.
-- [ ] Headless tests and CI cover the cache and argument forms.
+- [x] Headless tests and CI cover the cache and argument forms.
 
 ## Risks
 

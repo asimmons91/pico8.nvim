@@ -23,5 +23,9 @@
   `path` and cart-relative `gf` navigation, a shared include-target resolver,
   direct `nvim cart.p8.png` auto-open with virtual-buffer reuse and safe failure
   buffers, `:Pico8OpenPng` file completion, and focused include/PNG tests.
+- Complete M31: cache the P8SCII catalog per client and cart root, prefetch it
+  after attach, add `glyph_maps` setup activation, accept names, decimal bytes,
+  and `0x` bytes in `:Pico8InsertGlyph`, filter the picker by name,
+  description, or byte, and add cached-name command completion.
 - Vendor the editor-only PICO-8 Tree-sitter parser and queries.
 - Add plugin documentation and the inherited client milestone roadmap.

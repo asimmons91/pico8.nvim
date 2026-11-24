@@ -9,6 +9,7 @@ require("pico_lsp").setup({
   disable = false,            -- disable the helper and LSP setup
   codelens = true,            -- client-side budget lens display
   inlay_hints = true,         -- client-side inlay-hint display
+  glyph_maps = false,         -- install Shift-A..Z P8SCII glyph maps
   settings = {                -- optional pico8 server settings
     pico8 = { typeChecking = "basic" },
   },
@@ -24,6 +25,7 @@ require("pico_lsp").setup({
 | `disable` | boolean | `false` | Disable the helper and LSP setup. |
 | `codelens` | boolean | `true` | Enable client-side budget lens display for new `pico8` attachments. |
 | `inlay_hints` | boolean | `true` | Enable client-side inlay-hint display for new `pico8` attachments. |
+| `glyph_maps` | boolean | `false` | Install Shift-A..Z P8SCII glyph maps and prefetch the catalog. `vim.g.pico8_glyph_maps = 1` also enables them. |
 | `settings` | table | unset | `pico8` settings passed to the client config. |
 
 `vim.g.pico_lsp_cmd` and `PICO_LSP_BIN` are also accepted. A `cmd` string is
@@ -171,6 +173,12 @@ after initialization. Server defaults remain authoritative; the plugin ships no
 duplicate settings table. The authoritative reference is the
 [pico-lsp configuration docs](https://github.com/asimmons91/pico-lsp/blob/main/docs/configuration.md).
 
+The shipped client mirrors `settings.pico8` into
+`initializationOptions.pico8` when no explicit `init_options.pico8` is set.
+This makes requests sent during attach, such as the glyph catalog prefetch, see
+the configured catalog before the asynchronous configuration pull finishes.
+The pull remains authoritative for later server settings changes.
+
 Common settings:
 
 | Setting | Default | Meaning |
@@ -185,12 +193,27 @@ Common settings:
 
 ## Glyph maps
 
+Enable the maps with either the setup option:
+
+```lua
+require("pico_lsp").setup({ glyph_maps = true })
+```
+
+or the global, before opening a cart:
+
 ```lua
 vim.g.pico8_glyph_maps = 1
 ```
 
-Set before opening a cart. The maps are opt-in because they replace uppercase
-letters in Lua code. See [usage](usage.md#pico-8-shift-shortcuts).
+The maps are opt-in because they replace uppercase letters in Lua code. With
+either switch, the client prefetches the `pico8/glyphs` catalog after attach and
+caches it per client and cart root. Shift presses read the cached
+`byte -> text` map; a cold cache makes one bounded request and then falls back
+to literal letters.
+
+The cache lasts for the client lifetime. Changing `pico8.glyphs` requires a
+client restart so the new catalog is fetched and the old cache is cleared. See
+[usage](usage.md#pico-8-shift-shortcuts).
 
 ## Standalone native config
 

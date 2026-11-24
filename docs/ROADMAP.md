@@ -77,7 +77,7 @@ repository is the canonical client source.
 | M28 | Cart budget statusline | Cached cart info, `:Pico8CartInfo`, `:Pico8Tabs` | M25–M27 | Done |
 | M29 | Included `.lua` settings | PICO-8 comments, buffer variables, `:Pico8OpenCart` | M26 | Done |
 | M30 | Include navigation and PNG | `gf` for includes and direct `.p8.png` opening | pico-lsp M8, M25, M26 | Done |
-| M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Proposed |
+| M31 | Glyph input polish | Cached catalog, byte insertion, filtered picker | pico-lsp M16, M26 | Done |
 | M32 | Health check | `:checkhealth pico_lsp` | M25–M31 | Proposed |
 | M33 | Standard LSP hooks | Range formatting, document links, code-lens refresh | pico-lsp M7, M8, M11, M14 | External (pico-lsp) |
 | M34 | Tree-sitter installer | Build and install the vendored parser and queries | pico-lsp M12, M25 | Proposed |
@@ -90,12 +90,12 @@ repository is the canonical client source.
    helper (complete). **M27** — show the server's lens and hints (complete).
    **M28** — cached cart statusline and tab picker (complete). **M29** —
    included `.lua` settings and `:Pico8OpenCart` (complete). **M30** — include
-   navigation and direct PNG opening (complete).
-3. **M31** — glyph-input polish.
-4. **M32** — health checks.
-5. **M33** — server-owned; ship in `pico-lsp` when ready.
-6. **M34** — parser installer.
-7. **M35** — Mason and LazyVim distribution.
+   navigation and direct PNG opening (complete). **M31** — cached glyph input,
+   byte forms, and filtered picker (complete).
+3. **M32** — health checks.
+4. **M33** — server-owned; ship in `pico-lsp` when ready.
+5. **M34** — parser installer.
+6. **M35** — Mason and LazyVim distribution.
 
 M33 can ship before or after the client milestones; the client gracefully
 falls back to `gf` when document links and range formatting are unavailable.
@@ -118,7 +118,8 @@ falls back to `gf` when document links and range formatting are unavailable.
 - CI checks out or installs the server, then runs the suite on Neovim 0.11 and
   0.12.
 - Tests cover attachment, includes, `gf` navigation, PNG carts and auto-open,
-  glyph input, commands, and failure paths.
+  glyph cache and prefetch behavior, byte insertion, picker filtering,
+  completion, commands, and failure paths.
 - Server tests, Go fuzz tests, and LSP e2e tests remain in `pico-lsp`.
 - Manual checks for LazyVim, lazy.nvim, and vanilla `runtimepath` are recorded
   in the milestone checklist.

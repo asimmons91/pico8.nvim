@@ -45,13 +45,18 @@ if &path == "" || &path == ".,,"
 endif
 
 " Optional PICO-8 editor-style glyph shortcuts. Set g:pico8_glyph_maps = 1
-" before opening a cart. In Lua code sections (but not #include paths),
-" Shift-A..Z insert the 26 typeable P8SCII symbols (0x80-0x99) in alphabetical
-" order, matching the PICO-8 editor. The mappings fetch canonical text from
-" pico8/glyphs and fall back to the literal uppercase key outside code, in
-" include paths, or without a client. Use CTRL-V u<hex> inside code to insert
-" a literal uppercase letter, for example CTRL-V u0055 for U.
-if get(g:, "pico8_glyph_maps", 0)
+" or call require("pico_lsp").setup({ glyph_maps = true }) before opening a
+" cart. In Lua code sections (but not #include paths), Shift-A..Z insert the 26
+" typeable P8SCII symbols (0x80-0x99) in alphabetical order, matching the
+" PICO-8 editor. The mappings read the cached pico8/glyphs catalog and fall
+" back to the literal uppercase key outside code, in include paths, or without
+" a client. Use CTRL-V u<hex> inside code to insert a literal uppercase letter,
+" for example CTRL-V u0055 for U.
+let s:pico8_glyph_maps = get(g:, "pico8_glyph_maps", 0)
+if !s:pico8_glyph_maps
+  let s:pico8_glyph_maps = luaeval("require('pico_lsp').glyph_maps_enabled()")
+endif
+if s:pico8_glyph_maps
   let b:pico8_glyph_bufnr = str2nr(expand("<abuf>"))
   if b:pico8_glyph_bufnr == 0
     let b:pico8_glyph_bufnr = bufnr("%")
@@ -60,6 +65,7 @@ if get(g:, "pico8_glyph_maps", 0)
   for s:code in range(char2nr("A"), char2nr("Z"))
     let b:undo_ftplugin .= "|silent! iunmap <buffer> " . nr2char(s:code)
   endfor
-  let b:undo_ftplugin .= "|unlet! b:pico8_glyph_bufnr"
+  let b:undo_ftplugin .= "|unlet! b:pico8_glyph_bufnr b:pico8_glyph_maps"
   unlet s:code
 endif
+unlet s:pico8_glyph_maps
