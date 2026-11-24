@@ -255,6 +255,17 @@ local function remove_buffer_from_root(bufnr, key)
   end
 end
 
+local function root_buffer_count(key)
+  local count = 0
+  for _ in pairs(root_buffers[key] or {}) do
+    count = count + 1
+    if count > 1 then
+      return count
+    end
+  end
+  return count
+end
+
 local function unmark_buffer(bufnr)
   local key = buffer_roots[bufnr]
   buffer_roots[bufnr] = nil
@@ -695,8 +706,10 @@ end
 
 -- The helper revalidated a Lua buffer onto a different owning cart, or off a
 -- cart entirely. Schedule a refresh; the response re-keys the buffer under its
--- new owner. Do not unmap first: an in-flight request or queued command
--- callback must survive the ownership sweep.
+-- new owner. When the old key is shared with other buffers, detach only this
+-- buffer first so its refresh cannot steal the old cart's response or queued
+-- command callbacks. A sole/provisional state stays in place so its callbacks
+-- survive and its response rekeys.
 local function schedule_owner_refresh(bufnr)
   local expected_epoch = epoch
   vim.schedule(function()
@@ -720,19 +733,23 @@ function M.owner_changed(bufnr, new_uri)
   end
   local key = buffer_roots[bufnr]
   local owner_missing = type(new_uri) ~= "string" or new_uri == ""
-  if owner_missing then
-    -- A buffer already keyed by its own URI is a standalone .lua cart.
-    if key and same_uri(key, document_uri(bufnr)) then
+  if owner_missing and key and same_uri(key, document_uri(bufnr)) then
+    local state = root_state[key]
+    if state and state.info then
+      return
+    end
+  end
+  local changed = not key or owner_missing or not same_uri(key, new_uri)
+  if key and not changed then
+    local state = root_state[key]
+    if state and state.info then
       return
     end
     schedule_owner_refresh(bufnr)
     return
   end
-  if key and same_uri(key, new_uri) then
-    local state = root_state[key]
-    if state and state.info then
-      return
-    end
+  if key and changed and root_buffer_count(key) > 1 then
+    unmark_buffer(bufnr)
   end
   schedule_owner_refresh(bufnr)
 end

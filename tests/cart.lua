@@ -716,7 +716,13 @@ edit(order_cart)
 vim.api.nvim_buf_set_lines(order_cart_buf, -1, -1, false, {
   "local order_newer_expression = 'a newer cart value that must survive'",
 })
-fire_text_changed(order_cart_buf)
+-- Let the didChange reach the server, then refresh the cart directly. Do not
+-- fire TextChanged: a helper rescan would create a newer include request and
+-- hide the older-response ordering case.
+vim.wait(100, function()
+  return false
+end)
+api().refresh_cart_info(order_cart_buf)
 wait_for(function()
   local info = api().cart_info(order_cart_buf)
   return info ~= nil and info.tokens > order_baseline.tokens
@@ -1450,8 +1456,36 @@ wait_for(function()
   return api().cart_info(uo_lib_buf) ~= nil and vim.b[uo_lib_buf].pico8_cart == nil
 end, "the enabled helper claimed or lost the user-owned include")
 edit(uo_a)
+local uo_client = clients(uo_a_buf)[1]
+local restore_uo_patch = patch_request(uo_client, function(original, self, method, params, handler, bufnr)
+  if method ~= "pico8/cartInfo" then
+    return original(self, method, params, handler, bufnr)
+  end
+  return original(self, method, params, function(err, result)
+    vim.defer_fn(function()
+      handler(err, result)
+    end, 400)
+  end, bufnr)
+end)
+local uo_notifications, restore_uo_notify = start_notify_capture()
+vim.cmd("Pico8CartInfo")
 vim.api.nvim_buf_set_lines(uo_a_buf, 0, -1, false, cart_lines({ "uo_a = 1" }))
 vim.cmd("silent write")
+local uo_summary
+wait_for(function()
+  for _, notification in ipairs(uo_notifications) do
+    if notification.message:find("tokens", 1, true) then
+      uo_summary = notification.message
+      return true
+    end
+  end
+  return false
+end, "the user-owner cart command was dropped or misrouted", 8000)
+restore_uo_notify()
+restore_uo_patch()
+if not uo_summary:find(uo_a, 1, true) then
+  fail("the user-owner command reported the wrong cart: " .. uo_summary)
+end
 wait_for(function()
   local info = api().cart_info(uo_lib_buf)
   return info ~= nil and info.rootUri == vim.uri_from_fname(uo_b)
@@ -1459,6 +1493,19 @@ end, "the user-owned include did not follow the ownership change")
 local uo_a_after = api().cart_info(uo_a_buf)
 if not uo_a_after or uo_a_after.rootUri ~= uo_a_uri then
   fail("syncing a user-owned include cleared cart A's cache")
+end
+-- Remove the include from B too; the helper-enabled sweep must make the user
+-- buffer standalone without clearing B's cache.
+edit(uo_b)
+vim.api.nvim_buf_set_lines(uo_b_buf, 0, -1, false, cart_lines({ "uo_b = 2" }))
+vim.cmd("silent write")
+wait_for(function()
+  local info = api().cart_info(uo_lib_buf)
+  return info ~= nil and info.rootUri == vim.uri_from_fname(uo_lib)
+end, "the user-owned include did not become standalone after removal")
+local uo_b_after = api().cart_info(uo_b_buf)
+if not uo_b_after or uo_b_after.rootUri ~= vim.uri_from_fname(uo_b) then
+  fail("removing the user-owned include cleared cart B's cache")
 end
 
 -- A deferred save refresh must not repopulate the cache after disabling.
